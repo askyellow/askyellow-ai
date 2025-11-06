@@ -27,20 +27,20 @@ openai.api_key = key
 @app.post("/api/vraag")
 async def vraag_ai(data: dict):
     vraag = data.get("vraag", "")
+    datum = data.get("datum", "")  # ✅ datum ophalen van frontend
+
     if not vraag:
         return {"antwoord": "Geen vraag ontvangen."}
+
+    # Combineer datum + vraag in één duidelijke prompt
+    prompt = f"Vandaag is het {datum}. Beantwoord de volgende vraag accuraat en actueel: {vraag}"
+
     try:
         response = openai.chat.completions.create(
             model="gpt-4o-mini",
-            messages=[{"role": "user", "content": vraag}],
+            messages=[{"role": "user", "content": prompt}],
         )
         antwoord = response.choices[0].message.content.strip()
         return {"antwoord": antwoord}
     except Exception as e:
         return {"antwoord": f"Fout: {e}"}
-
-# Run only locally
-if __name__ == "__main__":
-    import uvicorn
-    port = int(os.environ.get("PORT", 8080))
-    uvicorn.run(app, host="0.0.0.0", port=port)
