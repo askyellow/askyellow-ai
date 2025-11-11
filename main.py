@@ -4,29 +4,28 @@ from dotenv import load_dotenv
 import openai
 import os
 
-# 🔹 laad de API-sleutel uit .env
+# 🔹 Laad de API-sleutel uit .env
 load_dotenv()
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
+# 🔹 Init FastAPI
 app = FastAPI()
+
+# 🔹 Welkomstroute
 @app.get("/")
 async def root():
     return {"message": "AskYellow backend werkt 🎯"}
 
-
 # 🔹 CORS openzetten (voor Strato / AskYellow frontend)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],   # later kun je hier je domein instellen
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-@app.get("/")
-def root():
-    return {"message": "AskYellow backend werkt 🎯"}
-
+# 🔹 API route voor vragen
 @app.post("/api/vraag")
 async def vraag_ai(request: Request):
     data = await request.json()
