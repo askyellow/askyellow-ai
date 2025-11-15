@@ -37,7 +37,7 @@ def load_file(path):
         return ""
 
 def load_character():
-    base = "yellowmind_v2/"
+    base = "yellowmind/"
     system_prompt = ""
 
     # CORE
@@ -77,7 +77,7 @@ def load_character():
 # -------------------------
 def detect_tone(user_input):
     text = user_input.lower()
-    base = "yellowmind_v2/tone/"
+    base = "yellowmind/tone/"
 
     if any(x in text for x in ["huil", "moeilijk", "ik weet niet", "help", "verdriet"]):
         return load_file(base + "empathy_mode.txt")
