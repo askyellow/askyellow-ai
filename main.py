@@ -37,7 +37,7 @@ def load_file(path):
         return ""
 
 def load_character():
-    base = "yellowmind/"
+    base = "yellowmind_v2/"
     system_prompt = ""
 
     # CORE
@@ -77,7 +77,7 @@ def load_character():
 # -------------------------
 def detect_tone(user_input):
     text = user_input.lower()
-    base = "yellowmind/tone/"
+    base = "yellowmind_v2/tone/"
 
     if any(x in text for x in ["huil", "moeilijk", "ik weet niet", "help", "verdriet"]):
         return load_file(base + "empathy_mode.txt")
@@ -116,11 +116,8 @@ async def ask(request: Request):
         ]
     )
 
-    # NEW OPENAI SDK (2024+)
-    answer = response.choices[0].message.content
-
+    answer = response.choices[0].message["content"]
     return {"answer": answer}
-
 
 
 # -------------------------
