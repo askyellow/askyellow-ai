@@ -1,120 +1,129 @@
-from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from dotenv import load_dotenv
 import openai
 import os
-import uvicorn
 
+# -------------------------
+# 1. LOAD API KEY
+# -------------------------
 load_dotenv()
+openai.api_key = os.getenv("OPENAI_API_KEY")
 
-# Load key
-key = os.getenv("OPENAI_API_KEY")
-print("🔑 API key:", "OK" if key else "MISSING")
-
+# -------------------------
+# 2. FASTAPI SETUP
+# -------------------------
 app = FastAPI()
 
-# CORS (Strato → Render)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 
-# ROOT test
-@app.get("/")
-def home():
-    return {"message": "AskYellow backend actief 🎯"}
-
-
-# AI route
-@app.post("/api/vraag")
-async def vraag_ai(data: dict):
-    vraag = data.get("vraag", "")
-    datum = data.get("datum", "")
-
-    if not vraag:
-        return {"antwoord": "Geen vraag ontvangen."}
-
-    vraag_lower = vraag.lower()
-
-    # Special hard-coded AskYellow answers
-    live_triggers = [
-        "ben je live",
-        "sta je live",
-        "ben jij live",
-        "ben je al live",
-        "sta je al live",
-        "ben je echt online",
-        "ben jij echt online"
-    ]
-    if any(t in vraag_lower for t in live_triggers):
-        return {
-            "antwoord": (
-                "Ja! 🙌 AskYellow AI Beta staat nu echt live op askyellow.nl. "
-                "Ik draai via onze eigen AskYellow-server en leer elke dag bij. "
-                "Je kunt me gewoon gebruiken als jouw persoonlijke antwoordmachine. 💛"
-            )
-        }
-
-    # AskYellow Character Prompt V2 (professioneel + veilig)
-    system_prompt = """
-Je bent AskYellow AI, de antwoordmachine van AskYellow.nl.
-Je geeft heldere, rustige en eerlijke antwoorden.
-Je gebruikt GEEN zinnen zoals:
-- “mijn kennis stopt in …”
-- “ik ben niet live”
-- “ik ben een AI-model”
-- “mijn training is tot …”
-- “ik heb geen toegang tot internet”
-
-In plaats daarvan:
-- Geef uitleg alsof je een behulpzame assistent bent.
-- Zeg alleen bij snelle ontwikkelingen dat informatie recent kan zijn veranderd.
-- Gebruik de taal van de gebruiker (NL of EN).
-- Geef GEEN gevaarlijke claims of medische/financiële zekerheden.
-- Blijf vriendelijk, direct en merk-consistent.
-
-Onze stijl:
-- kalm
-- eerlijk
-- duidelijk
-- menselijk
-"""
-
-    user_content = f"Vandaag is het {datum}. De gebruiker vraagt: {vraag}"
-
+# -------------------------
+# 3. FUNCTION: LOAD MODULES
+# -------------------------
+def load_file(path):
     try:
-        response = openai.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": system_prompt.strip()},
-                {"role": "user", "content": user_content}
-            ],
-        )
+        with open(path, "r", encoding="utf-8") as f:
+            return f.read() + "\n\n"
+    except:
+        return ""
 
-        antwoord = response.choices[0].message.content.strip()
+def load_character():
+    base = "yellowmind_v2/"
+    system_prompt = ""
 
-        # Confidence / sanity check
-        lower = antwoord.lower()
-        if any(x in lower for x in ["ik weet het niet", "geen idee", "kan niet vinden"]):
-            antwoord += (
-                "\n\n(📌 Tip: Dit onderwerp verandert snel. Controleer belangrijke informatie altijd even extra.)"
-            )
+    # CORE
+    system_prompt += load_file(base + "core/core_identity.txt")
+    system_prompt += load_file(base + "core/mission.txt")
+    system_prompt += load_file(base + "core/values.txt")
+    system_prompt += load_file(base + "core/introduction_rules.txt")
+    system_prompt += load_file(base + "core/communication_baseline.txt")
 
-        return {"antwoord": antwoord}
+    # PARENTS
+    system_prompt += load_file(base + "parents/parent_profile_brigitte.txt")
+    system_prompt += load_file(base + "parents/parent_profile_dennis.txt")
+    system_prompt += load_file(base + "parents/parent_mix_logic.txt")
 
-    except Exception as e:
-        # Safety fallback
-        return {
-            "antwoord": (
-                "Ik kan op dit moment geen live antwoord ophalen. "
-                "Probeer het over een paar seconden opnieuw. ⚠️"
-            )
-        }
+    # BEHAVIOUR
+    system_prompt += load_file(base + "behaviour/behaviour_rules.txt")
+    system_prompt += load_file(base + "behaviour/boundaries_safety.txt")
+    system_prompt += load_file(base + "behaviour/escalation_rules.txt")
+    system_prompt += load_file(base + "behaviour/uncertainty_handling.txt")
+    system_prompt += load_file(base + "behaviour/user_types.txt")
+
+    # KNOWLEDGE
+    system_prompt += load_file(base + "knowledge/knowledge_sources.txt")
+    system_prompt += load_file(base + "knowledge/askyellow_site_rules.txt")
+    system_prompt += load_file(base + "knowledge/product_rules.txt")
+    system_prompt += load_file(base + "knowledge/no_hallucination_rules.txt")
+    system_prompt += load_file(base + "knowledge/limitations.txt")
+
+    # SYSTEM (master prompt)
+    system_prompt += load_file(base + "system/yellowmind_master_prompt_v2.txt")
+
+    return system_prompt
 
 
-if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+# -------------------------
+# 4. DETECT TONE MODULE
+# -------------------------
+def detect_tone(user_input):
+    text = user_input.lower()
 
+    base = "yellowmind_v2/tone/"
+
+    if any(x in text for x in ["huil", "moeilijk", "ik weet niet", "help", "verdriet"]):
+        return load_file(base + "empathy_mode.txt")
+
+    if any(x in text for x in ["api", "error", "code", "liquid", "script", "dns", "bug"]):
+        return load_file(base + "tech_mode.txt")
+
+    if any(x in text for x in ["kort", "snel", "opsomming"]):
+        return load_file(base + "concise_mode.txt")
+
+    if any(x in text for x in ["verhaal", "creative", "sprookje", "fantasie"]):
+        return load_file(base + "storytelling_mode.txt")
+
+    if any(x in text for x in ["askyellow", "branding", "logo", "stijl"]):
+        return load_file(base + "branding_mode.txt")
+
+    return ""
+
+
+# -------------------------
+# 5. API ENDPOINT
+# -------------------------
+@app.post("/ask")
+async def ask(request: Request):
+
+    data = await request.json()
+    question = data.get("question", "")
+
+    # combine full system prompt
+    system_prompt = load_character() + detect_tone(question)
+
+    # AI call
+    response = openai.ChatCompletion.create(
+        model="gpt-4o-mini",   # of gpt-5.1 zodra jij wil
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": question}
+        ]
+    )
+
+    answer = response["choices"][0]["message"]["content"]
+    return {"answer": answer}
+
+
+# -------------------------
+# 6. STATUS CHECK
+# -------------------------
+@app.get("/")
+async def root():
+    return {"status": "Yellowmind v2.0 draait 🤖💛"}
