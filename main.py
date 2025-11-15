@@ -116,8 +116,11 @@ async def ask(request: Request):
         ]
     )
 
-    answer = response.choices[0].message["content"]
+    # NEW OPENAI SDK (2024+)
+    answer = response.choices[0].message.content
+
     return {"answer": answer}
+
 
 
 # -------------------------
