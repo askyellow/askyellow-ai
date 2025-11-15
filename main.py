@@ -1,14 +1,16 @@
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
-import openai
+from openai import OpenAI
 import os
 
 # -------------------------
 # 1. LOAD API KEY
 # -------------------------
 load_dotenv()
-openai.api_key = os.getenv("OPENAI_API_KEY")
+os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY")
+
+client = OpenAI()
 
 # -------------------------
 # 2. FASTAPI SETUP
@@ -75,7 +77,6 @@ def load_character():
 # -------------------------
 def detect_tone(user_input):
     text = user_input.lower()
-
     base = "yellowmind_v2/tone/"
 
     if any(x in text for x in ["huil", "moeilijk", "ik weet niet", "help", "verdriet"]):
@@ -105,19 +106,17 @@ async def ask(request: Request):
     data = await request.json()
     question = data.get("question", "")
 
-    # combine full system prompt
     system_prompt = load_character() + detect_tone(question)
 
-    # AI call
-    response = openai.ChatCompletion.create(
-        model="gpt-4o-mini",   # of gpt-5.1 zodra jij wil
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": question}
         ]
     )
 
-    answer = response["choices"][0]["message"]["content"]
+    answer = response.choices[0].message["content"]
     return {"answer": answer}
 
 
