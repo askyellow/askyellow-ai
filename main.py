@@ -2,15 +2,16 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from openai import OpenAI
-from pydantic import BaseModel
 import os
+
+# KNOWLEDGE ENGINE IMPORTS
+from yellowmind.knowledge_engine import load_knowledge, match_question
 
 # -------------------------
 # 1. LOAD API KEY
 # -------------------------
 load_dotenv()
 os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY")
-
 client = OpenAI()
 
 # -------------------------
@@ -26,9 +27,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# -------------------------
+# 3. LOAD ASKYELLOW KNOWLEDGEBASE
+# -------------------------
+print("📚 Loading AskYellow KnowledgeBase...")
+knowledge_entries = load_knowledge()
+print(f"📚 Loaded {len(knowledge_entries)} knowledge entries.")
+
 
 # -------------------------
-# 3. LOAD MODULES
+# 4. FUNCTION: LOAD MODULES
 # -------------------------
 def load_file(path):
     try:
@@ -60,21 +68,21 @@ def load_character():
     system_prompt += load_file(base + "behaviour/uncertainty_handling.txt")
     system_prompt += load_file(base + "behaviour/user_types.txt")
 
-    # KNOWLEDGE
+    # KNOWLEDGE RULES
     system_prompt += load_file(base + "knowledge/knowledge_sources.txt")
     system_prompt += load_file(base + "knowledge/askyellow_site_rules.txt")
     system_prompt += load_file(base + "knowledge/product_rules.txt")
     system_prompt += load_file(base + "knowledge/no_hallucination_rules.txt")
     system_prompt += load_file(base + "knowledge/limitations.txt")
 
-    # SYSTEM (master prompt)
+    # SYSTEM (MASTER PROMPT)
     system_prompt += load_file(base + "system/yellowmind_master_prompt_v2.txt")
 
     return system_prompt
 
 
 # -------------------------
-# 4. DETECT TONE MODULE
+# 5. DETECT TONE MODULE
 # -------------------------
 def detect_tone(user_input):
     text = user_input.lower()
@@ -99,23 +107,24 @@ def detect_tone(user_input):
 
 
 # -------------------------
-# 5. REQUEST MODEL (correct Swagger + correct JSON)
-# -------------------------
-class AskInput(BaseModel):
-    question: str
-
-
-# -------------------------
-# 6. MAIN AI ENDPOINT (/ask)
+# 6. MAIN AI ENDPOINT
 # -------------------------
 @app.post("/ask")
-async def ask(data: AskInput):
+async def ask(request: Request):
 
-    question = data.question
+    data = await request.json()
+    question = data.get("question", "").strip()
 
+    # 1️⃣ TRY KNOWLEDGEBASE FIRST
+    kb_answer = match_question(question, knowledge_entries)
+    if kb_answer:
+        print("⚡ KnowledgeBase match hit!")
+        return {"answer": kb_answer}
+
+    # 2️⃣ BUILD SYSTEM PROMPT
     system_prompt = load_character() + detect_tone(question)
 
-    # NEW OPENAI SDK (2024+)
+    # 3️⃣ OPENAI FALLBACK
     response = client.responses.create(
         model="gpt-4o-mini",
         input=[
@@ -125,7 +134,6 @@ async def ask(data: AskInput):
     )
 
     answer = response.output_text
-
     return {"answer": answer}
 
 
@@ -134,4 +142,4 @@ async def ask(data: AskInput):
 # -------------------------
 @app.get("/")
 async def root():
-    return {"status": "Yellowmind v2.0 draait 🤖💛"}
+    return {"status": "YellowMind v2.0 draait 🤖💛"}
