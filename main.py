@@ -11,8 +11,10 @@ from yellowmind.knowledge_engine import load_knowledge, match_question
 # 1. LOAD API KEY
 # -------------------------
 load_dotenv()
-os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY")
-client = OpenAI()
+api_key = os.getenv("OPENAI_API_KEY")
+if not api_key:
+    raise ValueError("OPENAI_API_KEY environment variable is not set")
+client = OpenAI(api_key=api_key)
 
 # -------------------------
 # 2. FASTAPI SETUP
