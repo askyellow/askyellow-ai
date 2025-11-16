@@ -1,0 +1,38 @@
+{
+  "entries": [
+    {
+      "patterns": [
+        "wat is askyellow",
+        "wat doet askyellow",
+        "wat is ask yellow",
+        "leg uit wat askyellow is",
+        "what is askyellow",
+        "what does askyellow do"
+      ],
+      "category": "general",
+      "lang": "nl",
+      "answer": "AskYellow is mijn thuisbasis 💛 — een slimme zoek- en antwoordmachine die jou eerlijke, heldere en snelle informatie geeft zonder gedoe. Het combineert AI-antwoorden met onze webshop en eigen data, zodat jij altijd precies weet waar je aan toe bent."
+    },
+    {
+      "patterns": [
+        "waarvoor kan ik askyellow gebruiken",
+        "waarom bestaat askyellow",
+        "waar dient askyellow voor"
+      ],
+      "category": "general",
+      "lang": "nl",
+      "answer": "AskYellow bestaat om jouw wereld makkelijker te maken. Geen reclame-chaos, geen misleiding, maar gewoon eerlijke antwoorden en heldere informatie. Je kunt me vragen stellen over bijna alles — ik help je graag. 💛"
+    },
+    {
+      "patterns": [
+        "wat kost askyellow",
+        "is askyellow gratis",
+        "moet ik betalen voor askyellow",
+        "what does askyellow cost"
+      ],
+      "category": "general",
+      "lang": "nl",
+      "answer": "AskYellow AI Beta is nu helemaal gratis te gebruiken. In de toekomst komen er misschien extra functies, maar de basis blijft gewoon toegankelijk voor iedereen. 💛"
+    }
+  ]
+}
