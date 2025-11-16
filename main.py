@@ -2,6 +2,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from openai import OpenAI
+from pydantic import BaseModel
 import os
 
 # -------------------------
@@ -27,7 +28,7 @@ app.add_middleware(
 
 
 # -------------------------
-# 3. FUNCTION: LOAD MODULES
+# 3. LOAD MODULES
 # -------------------------
 def load_file(path):
     try:
@@ -37,7 +38,7 @@ def load_file(path):
         return ""
 
 def load_character():
-    base = "yellowmind_v2/"
+    base = "yellowmind/"
     system_prompt = ""
 
     # CORE
@@ -77,7 +78,7 @@ def load_character():
 # -------------------------
 def detect_tone(user_input):
     text = user_input.lower()
-    base = "yellowmind_v2/tone/"
+    base = "yellowmind/tone/"
 
     if any(x in text for x in ["huil", "moeilijk", "ik weet niet", "help", "verdriet"]):
         return load_file(base + "empathy_mode.txt")
@@ -98,30 +99,38 @@ def detect_tone(user_input):
 
 
 # -------------------------
-# 5. API ENDPOINT
+# 5. REQUEST MODEL (correct Swagger + correct JSON)
+# -------------------------
+class AskInput(BaseModel):
+    question: str
+
+
+# -------------------------
+# 6. MAIN AI ENDPOINT (/ask)
 # -------------------------
 @app.post("/ask")
-async def ask(request: Request):
+async def ask(data: AskInput):
 
-    data = await request.json()
-    question = data.get("question", "")
+    question = data.question
 
     system_prompt = load_character() + detect_tone(question)
 
-    response = client.chat.completions.create(
+    # NEW OPENAI SDK (2024+)
+    response = client.responses.create(
         model="gpt-4o-mini",
-        messages=[
+        input=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": question}
         ]
     )
 
-    answer = response.choices[0].message["content"]
+    answer = response.output_text
+
     return {"answer": answer}
 
 
 # -------------------------
-# 6. STATUS CHECK
+# 7. STATUS CHECK
 # -------------------------
 @app.get("/")
 async def root():
