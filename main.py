@@ -6,6 +6,7 @@ import os
 
 # KNOWLEDGE ENGINE IMPORTS
 from yellowmind.knowledge_engine import load_knowledge, match_question
+from yellowmind.identity_origin import try_identity_origin_answer
 
 # -------------------------
 # 1. LOAD API KEY
@@ -122,7 +123,11 @@ async def ask(request: Request):
     if kb_answer:
         print("⚡ KnowledgeBase match hit!")
         return {"answer": kb_answer}
-
+    # 1.5️⃣ IDENTITY & ORIGIN LAYER
+    identity_answer = try_identity_origin_answer(question, lang="nl")
+    if identity_answer is not None:
+        print("🟡 Identity/Origin layer match!")
+        return {"answer": identity_answer}
     # 2️⃣ BUILD SYSTEM PROMPT
     system_prompt = load_character() + detect_tone(question)
 
