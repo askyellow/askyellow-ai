@@ -134,7 +134,8 @@ async def ask_ai(request: Request):
         # 2. KNOWLEDGE ENGINE (eigen JSON / kennisbestand)
         # -----------------------------------------------------
         try:
-            kb_answer = match_question(question, KB, language)
+            kb_answer = match_question(question, KB)
+
         except Exception as e:
             print("⚠️ knowledge engine error:", e)
             kb_answer = None
