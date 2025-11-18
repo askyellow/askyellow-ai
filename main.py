@@ -2,16 +2,13 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from openai import OpenAI
-import mysql.connector
 import os
 
 # =============================================================
 # 0. KNOWLEDGE ENGINE IMPORTS
 # =============================================================
-# (Uit jouw yellowmind/ map)
 from yellowmind.knowledge_engine import load_knowledge, match_question
 from yellowmind.identity_origin import try_identity_origin_answer
-
 
 # =============================================================
 # 1. ENVIRONMENT & OPENAI CLIENT
@@ -23,13 +20,6 @@ if not api_key:
     raise ValueError("OPENAI_API_KEY environment variable is missing")
 
 client = OpenAI(api_key=api_key)
-
-# SQL gegevens
-SQL_HOST = os.getenv("SQL_HOST")
-SQL_USER = os.getenv("SQL_USER")
-SQL_PASS = os.getenv("SQL_PASS")
-SQL_DB   = os.getenv("SQL_DB")
-
 
 # =============================================================
 # 2. FASTAPI SETUP
@@ -44,48 +34,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
 # =============================================================
 # 3. LOAD KNOWLEDGE ENGINE (bij startup)
 # =============================================================
 KB = load_knowledge()
 
-
 # =============================================================
-# 4. SQL LOGGING
+# 4. SQL LOGGING UITGESCHAKELD
 # =============================================================
 def log_to_sql(question: str, answer: str):
     """
-    Slaat vraag + antwoord op in yellowmind_logs.
-    Mag nooit de AI breken → try/except is streng.
+    SQL logging is uitgeschakeld. Frontend gebruikt log.php op Strato.
     """
-    if not (SQL_HOST and SQL_USER and SQL_PASS and SQL_DB):
-        print("🔴 SQL LOGGING SKIPPED: missing env vars")
-        return
-
-    try:
-        conn = mysql.connector.connect(
-            host=SQL_HOST,
-            user=SQL_USER,
-            password=SQL_PASS,
-            database=SQL_DB,
-        )
-        cursor = conn.cursor()
-        cursor.execute(
-            """
-            INSERT INTO yellowmind_logs (question, answer)
-            VALUES (%s, %s)
-            """,
-            (question, answer),
-        )
-        conn.commit()
-        cursor.close()
-        conn.close()
-
-        print("🔵 SQL LOG OK")
-    except Exception as e:
-        print("🔴 SQL LOGGING ERROR:", e)
-
+    print("ℹ️ SQL logging disabled (frontend handles logging via log.php)")
 
 # =============================================================
 # 5. HEALTH CHECK
@@ -96,7 +57,6 @@ async def root():
         "status": "ok",
         "message": "Yellowmind backend draait 🚀"
     }
-
 
 # =============================================================
 # 6. HOOFD ENDPOINT: /ask
@@ -117,7 +77,7 @@ async def ask_ai(request: Request):
     source = "unknown"
 
     # ---------------------------------------------------------
-    # 1. IDENTITY ORIGIN (vaste antwoorden)
+    # 1. IDENTITY ORIGIN
     # ---------------------------------------------------------
     try:
         identity_answer = try_identity_origin_answer(question, language)
@@ -131,11 +91,10 @@ async def ask_ai(request: Request):
 
     else:
         # -----------------------------------------------------
-        # 2. KNOWLEDGE ENGINE (eigen JSON / kennisbestand)
+        # 2. KNOWLEDGE ENGINE
         # -----------------------------------------------------
         try:
             kb_answer = match_question(question, KB)
-
         except Exception as e:
             print("⚠️ knowledge engine error:", e)
             kb_answer = None
@@ -146,7 +105,7 @@ async def ask_ai(request: Request):
 
         else:
             # -------------------------------------------------
-            # 3. OPENAI FALLBACK (live antwoord)
+            # 3. OPENAI FALLBACK
             # -------------------------------------------------
             try:
                 system_msg = (
@@ -175,12 +134,9 @@ async def ask_ai(request: Request):
                 source = "error"
 
     # ---------------------------------------------------------
-    # 4. LOGGING NAAR SQL (ALTIJD uitvoeren)
+    # 4. LOGGING (UIT)
     # ---------------------------------------------------------
-    try:
-        log_to_sql(question, final_answer)
-    except Exception as e:
-        print("⚠️ Unexpected logging error:", e)
+    log_to_sql(question, final_answer)
 
     # ---------------------------------------------------------
     # 5. TERUG NAAR FRONTEND
