@@ -1,172 +1,190 @@
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
 from dotenv import load_dotenv
 from openai import OpenAI
+import mysql.connector
 import os
-import uvicorn
 
-# KNOWLEDGE ENGINE IMPORTS
+# =============================================================
+# 0. KNOWLEDGE ENGINE IMPORTS
+# =============================================================
+# (Uit jouw yellowmind/ map)
 from yellowmind.knowledge_engine import load_knowledge, match_question
 from yellowmind.identity_origin import try_identity_origin_answer
 
-# -------------------------
-# 1. LOAD API KEY
-# -------------------------
+
+# =============================================================
+# 1. ENVIRONMENT & OPENAI CLIENT
+# =============================================================
 load_dotenv()
+
 api_key = os.getenv("OPENAI_API_KEY")
 if not api_key:
-    raise ValueError("OPENAI_API_KEY environment variable is not set")
+    raise ValueError("OPENAI_API_KEY environment variable is missing")
+
 client = OpenAI(api_key=api_key)
 
-# -------------------------
+# SQL gegevens
+SQL_HOST = os.getenv("SQL_HOST")
+SQL_USER = os.getenv("SQL_USER")
+SQL_PASS = os.getenv("SQL_PASS")
+SQL_DB   = os.getenv("SQL_DB")
+
+
+# =============================================================
 # 2. FASTAPI SETUP
-# -------------------------
+# =============================================================
 app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],      # later strakker instellen
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# -------------------------
-# 3. LOAD ASKYELLOW KNOWLEDGEBASE
-# -------------------------
-print("📚 Loading AskYellow KnowledgeBase...")
-knowledge_entries = load_knowledge()
-print(f"📚 Loaded {len(knowledge_entries)} knowledge entries.")
+
+# =============================================================
+# 3. LOAD KNOWLEDGE ENGINE (bij startup)
+# =============================================================
+KB = load_knowledge()
 
 
-# -------------------------
-# 4. FUNCTION: LOAD MODULES
-# -------------------------
-def load_file(path):
+# =============================================================
+# 4. SQL LOGGING
+# =============================================================
+def log_to_sql(question: str, answer: str):
+    """
+    Slaat vraag + antwoord op in yellowmind_logs.
+    Mag nooit de AI breken → try/except is streng.
+    """
+    if not (SQL_HOST and SQL_USER and SQL_PASS and SQL_DB):
+        print("🔴 SQL LOGGING SKIPPED: missing env vars")
+        return
+
     try:
-        with open(path, "r", encoding="utf-8") as f:
-            return f.read() + "\n\n"
-    except:
-        return ""
+        conn = mysql.connector.connect(
+            host=SQL_HOST,
+            user=SQL_USER,
+            password=SQL_PASS,
+            database=SQL_DB,
+        )
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            INSERT INTO yellowmind_logs (question, answer)
+            VALUES (%s, %s)
+            """,
+            (question, answer),
+        )
+        conn.commit()
+        cursor.close()
+        conn.close()
 
-def load_character():
-    base = "yellowmind/"
-    system_prompt = ""
-
-    # CORE
-    system_prompt += load_file(base + "core/core_identity.txt")
-    system_prompt += load_file(base + "core/mission.txt")
-    system_prompt += load_file(base + "core/values.txt")
-    system_prompt += load_file(base + "core/introduction_rules.txt")
-    system_prompt += load_file(base + "core/communication_baseline.txt")
-
-    # PARENTS
-    system_prompt += load_file(base + "parents/parent_profile_brigitte.txt")
-    system_prompt += load_file(base + "parents/parent_profile_dennis.txt")
-    system_prompt += load_file(base + "parents/parent_mix_logic.txt")
-
-    # BEHAVIOUR
-    system_prompt += load_file(base + "behaviour/behaviour_rules.txt")
-    system_prompt += load_file(base + "behaviour/boundaries_safety.txt")
-    system_prompt += load_file(base + "behaviour/escalation_rules.txt")
-    system_prompt += load_file(base + "behaviour/uncertainty_handling.txt")
-    system_prompt += load_file(base + "behaviour/user_types.txt")
-
-    # KNOWLEDGE RULES
-    system_prompt += load_file(base + "knowledge/knowledge_sources.txt")
-    system_prompt += load_file(base + "knowledge/askyellow_site_rules.txt")
-    system_prompt += load_file(base + "knowledge/product_rules.txt")
-    system_prompt += load_file(base + "knowledge/no_hallucination_rules.txt")
-    system_prompt += load_file(base + "knowledge/limitations.txt")
-
-    # SYSTEM (MASTER PROMPT)
-    system_prompt += load_file(base + "system/yellowmind_master_prompt_v2.txt")
-
-    return system_prompt
+        print("🔵 SQL LOG OK")
+    except Exception as e:
+        print("🔴 SQL LOGGING ERROR:", e)
 
 
-# -------------------------
-# 5. DETECT TONE MODULE
-# -------------------------
-def detect_tone(user_input):
-    text = user_input.lower()
-    base = "yellowmind/tone/"
-
-    if any(x in text for x in ["huil", "moeilijk", "ik weet niet", "help", "verdriet"]):
-        return load_file(base + "empathy_mode.txt")
-
-    if any(x in text for x in ["api", "error", "code", "liquid", "script", "dns", "bug"]):
-        return load_file(base + "tech_mode.txt")
-
-    if any(x in text for x in ["kort", "snel", "opsomming"]):
-        return load_file(base + "concise_mode.txt")
-
-    if any(x in text for x in ["verhaal", "creative", "sprookje", "fantasie"]):
-        return load_file(base + "storytelling_mode.txt")
-
-    if any(x in text for x in ["askyellow", "branding", "logo", "stijl"]):
-        return load_file(base + "branding_mode.txt")
-
-    return ""
-
-
-# -------------------------
-# 6. MAIN AI ENDPOINT
-# -------------------------
-@app.post("/ask")
-async def ask(request: Request):
-
-    data = await request.json()
-    question = data.get("question", "").strip()
-
-    # 1️⃣ TRY KNOWLEDGEBASE FIRST
-    kb_answer = match_question(question, knowledge_entries)
-    if kb_answer:
-        print("⚡ KnowledgeBase match hit!")
-        return {"answer": kb_answer}
-
-    # 1.5️⃣ IDENTITY & ORIGIN LAYER
-    identity_answer = try_identity_origin_answer(question, lang="nl")
-    if identity_answer is not None:
-        print("🟡 Identity/Origin layer match!")
-        return {"answer": identity_answer}
-
-    # 2️⃣ BUILD SYSTEM PROMPT
-    system_prompt = load_character() + detect_tone(question)
-
-    # 3️⃣ OPENAI FALLBACK
-    response = client.responses.create(
-        model="gpt-4o-mini",
-        input=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": question}
-        ]
-    )
-
-    answer = response.output_text
-    return {"answer": answer}
-
-
-# -------------------------
-# 7. STATUS CHECK
-# -------------------------
+# =============================================================
+# 5. HEALTH CHECK
+# =============================================================
 @app.get("/")
 async def root():
-    return {"status": "YellowMind v2.0 draait 🤖💛"}
+    return {
+        "status": "ok",
+        "message": "Yellowmind backend draait 🚀"
+    }
 
 
-# -------------------------
-# 8. HEAD FIX — stops 405 spam in logs
-# -------------------------
-@app.head("/")
-async def head_root():
-    return Response(status_code=200)
+# =============================================================
+# 6. HOOFD ENDPOINT: /ask
+# =============================================================
+@app.post("/ask")
+async def ask_ai(request: Request):
+    data = await request.json()
+    question = (data.get("question") or "").strip()
+    language = (data.get("language") or "nl").lower()
 
+    if not question:
+        return {
+            "answer": "Ik heb geen vraag ontvangen. Typ eerst een vraag in het veld.",
+            "source": "system",
+        }
 
-# -------------------------
-# 9. LOCAL DEV STARTER (Render ignored)
-# -------------------------
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8000))
-    uvicorn.run("main:app", host="0.0.0.0", port=port)
+    final_answer = None
+    source = "unknown"
+
+    # ---------------------------------------------------------
+    # 1. IDENTITY ORIGIN (vaste antwoorden)
+    # ---------------------------------------------------------
+    try:
+        identity_answer = try_identity_origin_answer(question, language)
+    except Exception as e:
+        print("⚠️ identity-origin error:", e)
+        identity_answer = None
+
+    if identity_answer:
+        final_answer = identity_answer
+        source = "identity"
+
+    else:
+        # -----------------------------------------------------
+        # 2. KNOWLEDGE ENGINE (eigen JSON / kennisbestand)
+        # -----------------------------------------------------
+        try:
+            kb_answer = match_question(question, KB, language)
+        except Exception as e:
+            print("⚠️ knowledge engine error:", e)
+            kb_answer = None
+
+        if kb_answer:
+            final_answer = kb_answer
+            source = "knowledge"
+
+        else:
+            # -------------------------------------------------
+            # 3. OPENAI FALLBACK (live antwoord)
+            # -------------------------------------------------
+            try:
+                system_msg = (
+                    "Je bent Yellowmind, de AI van AskYellow. "
+                    "Je antwoordt eerlijk, duidelijk en vriendelijk. "
+                    "Blijf in dezelfde taal als de vraag."
+                )
+
+                completion = client.chat.completions.create(
+                    model="gpt-4.1-mini",
+                    messages=[
+                        {"role": "system", "content": system_msg},
+                        {"role": "user", "content": question},
+                    ],
+                )
+
+                final_answer = completion.choices[0].message.content
+                source = "openai"
+
+            except Exception as e:
+                print("🔴 OpenAI ERROR:", e)
+                final_answer = (
+                    "⚠️ Ik kan op dit moment geen live antwoord ophalen. "
+                    "Probeer het over een paar seconden opnieuw."
+                )
+                source = "error"
+
+    # ---------------------------------------------------------
+    # 4. LOGGING NAAR SQL (ALTIJD uitvoeren)
+    # ---------------------------------------------------------
+    try:
+        log_to_sql(question, final_answer)
+    except Exception as e:
+        print("⚠️ Unexpected logging error:", e)
+
+    # ---------------------------------------------------------
+    # 5. TERUG NAAR FRONTEND
+    # ---------------------------------------------------------
+    return {
+        "answer": final_answer,
+        "source": source,
+    }
