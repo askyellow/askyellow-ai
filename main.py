@@ -1,8 +1,10 @@
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 from dotenv import load_dotenv
 from openai import OpenAI
 import os
+import uvicorn
 
 # KNOWLEDGE ENGINE IMPORTS
 from yellowmind.knowledge_engine import load_knowledge, match_question
@@ -123,11 +125,13 @@ async def ask(request: Request):
     if kb_answer:
         print("⚡ KnowledgeBase match hit!")
         return {"answer": kb_answer}
+
     # 1.5️⃣ IDENTITY & ORIGIN LAYER
     identity_answer = try_identity_origin_answer(question, lang="nl")
     if identity_answer is not None:
         print("🟡 Identity/Origin layer match!")
         return {"answer": identity_answer}
+
     # 2️⃣ BUILD SYSTEM PROMPT
     system_prompt = load_character() + detect_tone(question)
 
@@ -150,3 +154,19 @@ async def ask(request: Request):
 @app.get("/")
 async def root():
     return {"status": "YellowMind v2.0 draait 🤖💛"}
+
+
+# -------------------------
+# 8. HEAD FIX — stops 405 spam in logs
+# -------------------------
+@app.head("/")
+async def head_root():
+    return Response(status_code=200)
+
+
+# -------------------------
+# 9. LOCAL DEV STARTER (Render ignored)
+# -------------------------
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run("main:app", host="0.0.0.0", port=port)
