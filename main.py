@@ -13,10 +13,8 @@ import re
 # 0. PAD & KNOWLEDGE ENGINE IMPORTS
 # =============================================================
 
-# Zorg dat we altijd relatief t.o.v. deze file werken
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# yellowmind/… imports (liggen in dezelfde map als main.py)
 from yellowmind.knowledge_engine import load_knowledge, match_question
 from yellowmind.identity_origin import try_identity_origin_answer
 
@@ -31,17 +29,13 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 if not OPENAI_API_KEY:
     raise ValueError("OPENAI_API_KEY environment variable is missing")
 
-# Model voor Yellowmind (kan je in Render/Replit als env var zetten)
-# ---------------------------------------------------------
-# VEILIGE MODEL-SELECTIE (met fallback + debugging)
-# ---------------------------------------------------------
-YELLOWMIND_MODEL = os.getenv("YELLOWMIND_MODEL")
+client = OpenAI(api_key=OPENAI_API_KEY)
 
+YELLOWMIND_MODEL = os.getenv("YELLOWMIND_MODEL")
 if not YELLOWMIND_MODEL:
     print("⚠️ Geen YELLOWMIND_MODEL env gevonden → fallback naar o3-mini")
     YELLOWMIND_MODEL = "o3-mini"
 
-# Optionele lijst van geldige modellen (voor debug / typo-detectie)
 VALID_MODELS = [
     "o3-mini",
     "o1-mini",
@@ -56,15 +50,10 @@ if YELLOWMIND_MODEL not in VALID_MODELS:
 
 print(f"🧠 Yellowmind gebruikt model: {YELLOWMIND_MODEL}")
 
-# URL naar Strato search-endpoint (eigen SQL-kennislaag)
-# Let op de www. – bij jullie nodig voor correcte hosting
 SQL_SEARCH_URL = os.getenv(
     "SQL_SEARCH_URL",
     "https://www.askyellow.nl/search_knowledge.php"
 )
-
-client = OpenAI(api_key=OPENAI_API_KEY)
-
 
 # =============================================================
 # 2. FASTAPI APP & CORS
@@ -74,7 +63,7 @@ app = FastAPI(title="YellowMind API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # TIP: later beperken tot askyellow.nl / shop.askyellow.nl
+    allow_origins=["*"], 
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -82,14 +71,10 @@ app.add_middleware(
 
 
 # =============================================================
-# 3. HELPERS: FILE LOADING & SYSTEM PROMPT
+# 3. HELPERS: LOAD FILES & PROMPT
 # =============================================================
 
 def load_file(path: str) -> str:
-    """
-    Lees een tekstbestand in als string.
-    Als het bestand niet bestaat: geef een lege string terug (liever stille fout dan crash).
-    """
     full_path = os.path.join(BASE_DIR, path)
     try:
         with open(full_path, "r", encoding="utf-8") as f:
@@ -98,47 +83,39 @@ def load_file(path: str) -> str:
         print(f"⚠️ Yellowmind config file niet gevonden: {full_path}")
         return ""
 
-
 def build_system_prompt() -> str:
-    """
-    Bouwt de volledige YellowMind system prompt door alle txt-blokken
-    in yellowmind/ bij elkaar te plakken.
-    """
-
     base = "yellowmind/"
     system_prompt = ""
 
-    # 1) SYSTEM / MASTER PROMPT
+    # SYSTEM CORE
     system_prompt += load_file(base + "system/yellowmind_master_prompt_v2.txt")
-
-    # 2) CORE
     system_prompt += load_file(base + "core/core_identity.txt")
     system_prompt += load_file(base + "core/mission.txt")
     system_prompt += load_file(base + "core/values.txt")
     system_prompt += load_file(base + "core/introduction_rules.txt")
     system_prompt += load_file(base + "core/communication_baseline.txt")
 
-    # 3) PARENTS
+    # PARENTS
     system_prompt += load_file(base + "parents/parent_profile_brigitte.txt")
     system_prompt += load_file(base + "parents/parent_profile_dennis.txt")
     system_prompt += load_file(base + "parents/parent_profile_yello.txt")
     system_prompt += load_file(base + "parents/parent_mix_logic.txt")
 
-    # 4) BEHAVIOUR & SAFETY
+    # BEHAVIOUR
     system_prompt += load_file(base + "behaviour/behaviour_rules.txt")
     system_prompt += load_file(base + "behaviour/boundaries_safety.txt")
     system_prompt += load_file(base + "behaviour/escalation_rules.txt")
     system_prompt += load_file(base + "behaviour/uncertainty_handling.txt")
     system_prompt += load_file(base + "behaviour/user_types.txt")
 
-    # 5) KNOWLEDGE & PRODUCT RULES
+    # KNOWLEDGE
     system_prompt += load_file(base + "knowledge/knowledge_sources.txt")
     system_prompt += load_file(base + "knowledge/askyellow_site_rules.txt")
     system_prompt += load_file(base + "knowledge/product_rules.txt")
     system_prompt += load_file(base + "knowledge/no_hallucination_rules.txt")
     system_prompt += load_file(base + "knowledge/limitations.txt")
 
-    # 6) TONE & MODES
+    # TONE
     system_prompt += load_file(base + "tone/tone_of_voice.txt")
     system_prompt += load_file(base + "tone/branding_mode.txt")
     system_prompt += load_file(base + "tone/empathy_mode.txt")
@@ -148,13 +125,11 @@ def build_system_prompt() -> str:
 
     return system_prompt.strip()
 
-
 SYSTEM_PROMPT = build_system_prompt()
-KNOWLEDGE_ENTRIES = load_knowledge()  # uit knowledge_engine.py
-
+KNOWLEDGE_ENTRIES = load_knowledge()
 
 # =============================================================
-# 4. SQL KNOWLEDGE SEARCH (HYBRIDE: PHP + PYTHON)
+# 4. SQL KNOWLEDGE LAYER
 # =============================================================
 
 def normalize(text: str) -> str:
@@ -163,7 +138,6 @@ def normalize(text: str) -> str:
     text = re.sub(r"[^\w\s]", " ", text)
     text = re.sub(r"\s+", " ", text)
     return text
-
 
 def jaccard_score(a: str, b: str) -> float:
     wa = set(normalize(a).split())
@@ -174,214 +148,118 @@ def jaccard_score(a: str, b: str) -> float:
     union = wa.union(wb)
     return len(inter) / len(union)
 
-
-def contains_score(question: str, candidate_q: str) -> float:
-    nq = normalize(question)
-    nc = normalize(candidate_q)
-    if nc in nq or nq in nc:
-        return 1.0
-    return 0.0
-
-
 def compute_match_score(user_q: str, cand_q: str) -> int:
-    j = jaccard_score(user_q, cand_q)        # overlap woorden
-    c = contains_score(user_q, cand_q)       # één bevat de ander
-
-    raw = 0.7 * j + 0.3 * c
-    score = int(raw * 100)
+    j = jaccard_score(user_q, cand_q)
+    contains = 1.0 if normalize(cand_q) in normalize(user_q) else 0.0
+    score = int((0.7 * j + 0.3 * contains) * 100)
     return max(0, min(score, 100))
 
-
 def search_sql_knowledge(question: str):
-    """
-    Roept search_knowledge.php aan op Strato om candidates op te halen,
-    vervolgens in Python scoreren en de beste teruggeven.
-    Verwacht JSON-lijst met dicts: { id, question, answer, ... }.
-    """
     try:
         resp = requests.post(SQL_SEARCH_URL, data={"q": question}, timeout=3)
         if resp.status_code != 200:
-            print("⚠️ SQL search HTTP status:", resp.status_code)
+            print("⚠️ SQL STATUS:", resp.status_code)
             return None
-
         data = resp.json()
     except Exception as e:
-        print("⚠️ SQL search error:", e)
-        return None
-
-    if not data:
+        print("⚠️ SQL ERROR:", e)
         return None
 
     best = None
     best_score = 0
 
     for row in data:
-        cand_q = row.get("question", "")
-        cand_a = row.get("answer", "")
-
-        score = compute_match_score(question, cand_q)
-
+        score = compute_match_score(question, row.get("question",""))
         if score > best_score:
             best_score = score
             best = {
                 "id": row.get("id"),
-                "question": cand_q,
-                "answer": cand_a,
-                "score": score,
+                "question": row.get("question",""),
+                "answer": row.get("answer",""),
+                "score": score
             }
 
-    if not best:
-        return None
-
-    print(f"🧠 Best SQL candidate score={best_score} for Q='{best['question']}'")
+    if best:
+        print(f"🧠 SQL BEST MATCH SCORE={best_score}")
     return best
 
 
 # =============================================================
-# 5. TONE / MODE DETECTION
+# 5. MODE DETECTION
 # =============================================================
 
-def detect_hints(question: str) -> dict:
-    """
-    Super simpele auto-detectie van mode_hint / context_type / user_type_hint.
-    Dit is puur heuristiek; later uit te breiden of te vervangen.
-    """
+def detect_hints(question: str):
     q = question.lower()
+    mode = "auto"
+    context = "general"
+    user = None
 
-    mode_hint = None
-    context_type = None
-    user_type_hint = None
-
-    # Emotioneel / onzeker
-    if any(x in q for x in ["ik voel me", "mislukt", "huil", "overprikkeld", "overwhelmed", "ik weet niet meer"]):
-        mode_hint = "empathy"
-        user_type_hint = "emotioneel"
-
-    # Tech
-    if any(x in q for x in ["api", "error", "foutmelding", "script", "bug", "dns", "shopify", "liquid"]):
-        mode_hint = "tech"
-        context_type = "general"
-
-    # Branding / socials / AskYellow
-    if any(x in q for x in ["askyellow", "yellowmind", "branding", "logo", "stijl",
-                            "instagram", "insta", "tiktok", "facebook", "caption",
-                            "post", "reel", "short"]):
-        if mode_hint is None:
-            mode_hint = "branding"
-        context_type = "askyellow_shop"
-
-    # Als nog niks bepaald is → general / auto
-    if mode_hint is None:
-        mode_hint = "auto"
-    if context_type is None:
-        context_type = "general"
+    if any(x in q for x in ["api", "bug", "foutmelding", "script", "dns"]):
+        mode = "tech"
+    if any(x in q for x in ["askyellow", "yellowmind", "logo", "branding"]):
+        mode = "branding"
+        context = "askyellow"
+    if any(x in q for x in ["ik voel me", "overprikkeld", "huil"]):
+        mode = "empathy"
+        user = "emotioneel"
 
     return {
-        "mode_hint": mode_hint,
-        "context_type": context_type,
-        "user_type_hint": user_type_hint,
+        "mode_hint": mode,
+        "context_type": context,
+        "user_type_hint": user
     }
 
 
 # =============================================================
-# 6. HELPERS: OPENAI CALL (MET MODEL-ROUTING)
+# 6. OPENAI CALL — FIXED FOR o3 RESPONSE FORMAT
 # =============================================================
 
-def call_yellowmind_llm(
-    question: str,
-    language: str,
-    kb_answer: str | None,
-    sql_match: dict | None,
-    hints: dict | None,
-) -> str:
-    """
-    Stuurt de vraag + system prompt + eventuele KB-kennis (JSON + SQL)
-    + backend hints naar het model. Laat YellowMind zelf het uiteindelijke
-    antwoord formuleren in AskYellow-stijl.
-    """
-
+def call_yellowmind_llm(question, language, kb_answer, sql_match, hints):
     messages = []
 
-    # SYSTEM: volledige brein + regels
     messages.append({"role": "system", "content": SYSTEM_PROMPT})
 
-    # SYSTEM: ASKYELLOW_KNOWLEDGE (JSON KB + SQL KB)
-    knowledge_parts = []
+    knowledge_blocks = []
 
     if kb_answer:
-        knowledge_parts.append(
-            "STATIC_KB (JSON / FAQ / site-informatie):\n"
-            + kb_answer.strip()
-        )
+        knowledge_blocks.append("STATIC_KB:\n" + kb_answer)
 
     if sql_match:
-        knowledge_parts.append(
-            "SQL_KB (geleerde vraag/antwoord uit database):\n"
-            f"Vraag: {sql_match.get('question', '').strip()}\n"
-            f"Antwoord: {sql_match.get('answer', '').strip()}\n"
-            f"Match-score: {sql_match.get('score')}"
+        knowledge_blocks.append(
+            "SQL_KB:\n"
+            f"Vraag: {sql_match['question']}\n"
+            f"Antwoord: {sql_match['answer']}\n"
+            f"Score: {sql_match['score']}"
         )
 
-    if knowledge_parts:
-        messages.append({
-            "role": "system",
-            "content": "[ASKYELLOW_KNOWLEDGE]\n" + "\n\n".join(knowledge_parts)
-        })
+    if knowledge_blocks:
+        messages.append({"role": "system", "content": "[ASKYELLOW_KNOWLEDGE]\n" + "\n\n".join(knowledge_blocks)})
 
-    # SYSTEM HINTS
-    if hints is None:
-        hints = {}
+    if hints:
+        hint_text = "\n".join([f"- {k}: {v}" for k,v in hints.items() if v])
+        messages.append({"role": "system", "content": "[BACKEND_HINTS]\n" + hint_text})
 
-    if language:
-        hints.setdefault("user_language", language)
-
-    hint_lines = [f"{k}: {v}" for k, v in hints.items() if v]
-    if hint_lines:
-        messages.append({
-            "role": "system",
-            "content": "[BACKEND_HINTS]\n" + "\n".join(f"- {line}" for line in hint_lines)
-        })
-
-    # USER
     messages.append({"role": "user", "content": question})
 
-    # -----------------------------
-    # 🔮 MODEL ROUTING
-    # -----------------------------
-    q = question.lower()
-
-    def is_complex(q: str) -> bool:
-        triggers = [
-            "bereken", "analyseer", "statistiek", "hoe werkt",
-            "code", "programmeer", "debug", "foutmelding",
-            "uitleg", "wiskunde", "fysica", "vergelijk"
-        ]
-        if len(q) > 180:
-            return True
-        return any(t in q for t in triggers)
-
     selected_model = YELLOWMIND_MODEL
+    print(f"🤖 Model geselecteerd: {selected_model}")
 
-    # Complexe vragen → opschalen naar gpt-4.1
-    if is_complex(q):
-        selected_model = "gpt-4.1"
-
-    print(f"🤖 Model geselecteerd voor deze vraag: {selected_model}")
-
-    # -----------------------------
-    # OPENAI CALL
-    # -----------------------------
-    response = client.responses.create(
+    # OpenAI Responses API
+    llm_response = client.responses.create(
         model=selected_model,
-        input=messages,
+        input=messages
     )
 
+    # Extract actual answer
     try:
-        text = response.output[0].content[0].text
-    except Exception:
-        text = str(response)
+        # output[1] = assistant message block (o3 structure)
+        assistant_block = llm_response.output[1]
+        answer_text = assistant_block.content[0].text
+    except Exception as e:
+        print("❌ EXTRACT ERROR:", e)
+        answer_text = "⚠️ Ik kon het antwoord niet verwerken."
 
-    return text.strip()
+    return answer_text, llm_response.output
 
 
 # =============================================================
@@ -392,17 +270,13 @@ def call_yellowmind_llm(
 async def root():
     return {"status": "ok", "message": "Yellowmind backend draait 🚀"}
 
-
 @app.get("/health")
 async def health():
     return {"status": "ok"}
 
-
 @app.head("/")
 async def head_root():
-    # Fix voor 405 HEAD spam in logs (Render health checks)
     return Response(status_code=200)
-
 
 @app.post("/ask")
 async def ask_ai(request: Request):
@@ -413,79 +287,60 @@ async def ask_ai(request: Request):
     if not question:
         return JSONResponse(
             status_code=400,
-            content={"error": "Geen vraag ontvangen. Stuur een veld 'question' mee in de body."},
+            content={"error": "Geen vraag ontvangen."},
         )
 
-    # 1️⃣ Identity / origin quick win (bijv. “Wie ben jij?”)
-    identity_answer = None
-    try:
-        # Nieuwe variant met (question, language)
-        identity_answer = try_identity_origin_answer(question, language)
-    except TypeError:
-        # Oudere variant die alleen question verwacht
-        try:
-            identity_answer = try_identity_origin_answer(question)
-        except Exception as e:
-            print("⚠️ identity-origin error:", e)
-            identity_answer = None
-
+    # QUICK IDENTITY
+    identity_answer = try_identity_origin_answer(question, language)
     if identity_answer:
         return {
             "answer": identity_answer,
+            "output": [],
             "source": "identity_origin",
             "kb_used": False,
             "sql_used": False,
             "sql_score": None,
-            "hints": {},
+            "hints": {}
         }
 
-    # 2️⃣ SQL KNOWLEDGE LAYER (alleen approved = 1, via PHP) → eigen data
-    sql_match_raw = search_sql_knowledge(question)
-    sql_match = None
-    if sql_match_raw and sql_match_raw.get("score", 0) >= 60:
-        sql_match = sql_match_raw
-    # Onder de 60 → te twijfelachtig, dan niet gebruiken als kennisblok
+    # SQL KNOWLEDGE
+    sql_match = search_sql_knowledge(question)
+    if sql_match and sql_match["score"] >= 60:
+        return {
+            "answer": sql_match["answer"],
+            "output": [],
+            "source": "sql",
+            "kb_used": False,
+            "sql_used": True,
+            "sql_score": sql_match["score"],
+            "hints": {}
+        }
 
-    # 3️⃣ JSON KNOWLEDGE ENGINE
+    # JSON KNOWLEDGE ENGINE
     try:
         kb_answer = match_question(question, KNOWLEDGE_ENTRIES)
-    except Exception as e:
-        print("⚠️ knowledge engine error:", e)
+    except Exception:
         kb_answer = None
 
-    # 4️⃣ Hints (mode, context, user_type, taal)
     hints = detect_hints(question)
 
-    # 5️⃣ Yellowmind LLM met volledig brein + KB + hints
-    try:
-        final_answer = call_yellowmind_llm(
-            question=question,
-            language=language,
-            kb_answer=kb_answer,
-            sql_match=sql_match,
-            hints=hints,
-        )
-        source = "yellowmind_llm"
-    except Exception as e:
-        print("🔴 Yellowmind LLM ERROR:", e)
-        final_answer = (
-            "⚠️ Ik kan op dit moment geen live antwoord ophalen. "
-            "Probeer het over een paar seconden opnieuw."
-        )
-        source = "error"
+    final_answer, raw_output = call_yellowmind_llm(
+        question, language, kb_answer, sql_match, hints
+    )
 
     return {
         "answer": final_answer,
-        "source": source,
+        "output": raw_output,
+        "source": "yellowmind_llm",
         "kb_used": bool(kb_answer),
         "sql_used": bool(sql_match),
         "sql_score": sql_match["score"] if sql_match else None,
-        "hints": hints,
+        "hints": hints
     }
 
 
 # =============================================================
-# 8. LOCAL DEV STARTER
+# 8. LOCAL DEV
 # =============================================================
 
 if __name__ == "__main__":
