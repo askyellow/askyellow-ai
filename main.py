@@ -26,7 +26,29 @@ if not OPENAI_API_KEY:
     raise ValueError("OPENAI_API_KEY environment variable is missing")
 
 # Model voor Yellowmind (kan je in Render/Replit als env var zetten)
-YELLOWMIND_MODEL = os.getenv("YELLOWMIND_MODEL", "gpt-4o-mini")
+# ---------------------------------------------------------
+# VEILIGE MODEL-SELECTIE (met fallback + debugging)
+# ---------------------------------------------------------
+YELLOWMIND_MODEL = os.getenv("YELLOWMIND_MODEL")
+
+if not YELLOWMIND_MODEL:
+    print("⚠️ Geen YELLOWMIND_MODEL env gevonden → fallback naar o3-mini")
+    YELLOWMIND_MODEL = "o3-mini"
+
+# Optionele lijst van geldige modellen (voor debug)
+VALID_MODELS = [
+    "o3-mini",
+    "o1-mini",
+    "gpt-4.1",
+    "gpt-4.1-mini",
+    "gpt-4o-mini",
+]
+
+if YELLOWMIND_MODEL not in VALID_MODELS:
+    print(f"⚠️ Onbekend model '{YELLOWMIND_MODEL}' → fallback naar o3-mini")
+    YELLOWMIND_MODEL = "o3-mini"
+
+print(f"🧠 Yellowmind gebruikt model: {YELLOWMIND_MODEL}")
 
 # URL naar je Strato search-endpoint (opbouwen eigen data)
 SQL_SEARCH_URL = os.getenv("SQL_SEARCH_URL", "https://askyellow.nl/search_knowledge.php")
@@ -269,12 +291,16 @@ def call_yellowmind_llm(
     + backend hints naar het model. Laat YellowMind zelf het uiteindelijke
     antwoord formuleren in AskYellow-stijl.
     """
+
+    # ------------------------------------------------------
+    # 1) SYSTEM MESSAGES OPBOUWEN
+    # ------------------------------------------------------
     messages = []
 
-    # SYSTEM: volledige brein + regels
+    # 1.1 — Master system prompt
     messages.append({"role": "system", "content": SYSTEM_PROMPT})
 
-    # SYSTEM: ASKYELLOW_KNOWLEDGE (JSON KB + SQL KB)
+    # 1.2 — Knowledge blocks (JSON + SQL)
     knowledge_parts = []
 
     if kb_answer:
@@ -295,36 +321,63 @@ def call_yellowmind_llm(
         knowledge_block = "[ASKYELLOW_KNOWLEDGE]\n" + "\n\n".join(knowledge_parts)
         messages.append({"role": "system", "content": knowledge_block})
 
-    # SYSTEM: BACKEND_HINTS (mode, context, user_type, taal)
+    # 1.3 — Backend hints (mode, context, user_type, taal)
     if hints is None:
         hints = {}
 
-    # Taal altijd als hint meegeven
     if language:
         hints.setdefault("user_language", language)
 
     hint_lines = [f"{k}: {v}" for k, v in hints.items() if v]
+
     if hint_lines:
         hints_block = "[BACKEND_HINTS]\n" + "\n".join(f"- {line}" for line in hint_lines)
         messages.append({"role": "system", "content": hints_block})
 
-    # USER: de eigenlijke vraag
+    # 1.4 — User message (de eigenlijke vraag)
     messages.append({"role": "user", "content": question})
 
-    # OpenAI Responses API
+    # ------------------------------------------------------
+    # 2) MODEL ROUTING – AUTOMATISCH MODEL KIEZEN
+    # ------------------------------------------------------
+    def is_complex(q: str) -> bool:
+        q = q.lower()
+
+        triggers = [
+            "bereken", "analyseer", "statistiek", "hoe werkt",
+            "code", "programmeer", "debug", "foutmelding",
+            "uitleg", "wiskunde", "fysica", "vergelijk"
+        ]
+        if len(q) > 180:
+            return True
+
+        return any(t in q for t in triggers)
+
+    # default model van env (bijv. o3-mini)
+    selected_model = YELLOWMIND_MODEL
+
+    # zwaar model voor complexe vragen
+    if is_complex(question):
+        selected_model = "gpt-4.1"
+
+    print(f"🤖 Model geselecteerd voor deze vraag: {selected_model}")
+
+    # ------------------------------------------------------
+    # 3) OPENAI CALL (RESPONSES API)
+    # ------------------------------------------------------
     response = client.responses.create(
-        model=YELLOWMIND_MODEL,
+        model=selected_model,
         input=messages,
     )
 
-    # Nieuw Responses-format: output[0].content[0].text
+    # Responses API format → text extraheren
     try:
         text = response.output[0].content[0].text
     except Exception:
-        # Fallback, just in case
         text = str(response)
 
     return text.strip()
+
 
 
 # =============================================================
