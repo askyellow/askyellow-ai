@@ -10,10 +10,16 @@ import unicodedata
 import re
 
 # =============================================================
-# 0. KNOWLEDGE ENGINE IMPORTS
+# 0. PAD & KNOWLEDGE ENGINE IMPORTS
 # =============================================================
+
+# Zorg dat we altijd relatief t.o.v. deze file werken
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# yellowmind/… imports (liggen in dezelfde map als main.py)
 from yellowmind.knowledge_engine import load_knowledge, match_question
 from yellowmind.identity_origin import try_identity_origin_answer
+
 
 # =============================================================
 # 1. ENVIRONMENT & OPENAI CLIENT
@@ -35,7 +41,7 @@ if not YELLOWMIND_MODEL:
     print("⚠️ Geen YELLOWMIND_MODEL env gevonden → fallback naar o3-mini")
     YELLOWMIND_MODEL = "o3-mini"
 
-# Optionele lijst van geldige modellen (voor debug)
+# Optionele lijst van geldige modellen (voor debug / typo-detectie)
 VALID_MODELS = [
     "o3-mini",
     "o1-mini",
@@ -50,10 +56,15 @@ if YELLOWMIND_MODEL not in VALID_MODELS:
 
 print(f"🧠 Yellowmind gebruikt model: {YELLOWMIND_MODEL}")
 
-# URL naar je Strato search-endpoint (opbouwen eigen data)
-SQL_SEARCH_URL = os.getenv("SQL_SEARCH_URL", "https://askyellow.nl/search_knowledge.php")
+# URL naar Strato search-endpoint (eigen SQL-kennislaag)
+# Let op de www. – bij jullie nodig voor correcte hosting
+SQL_SEARCH_URL = os.getenv(
+    "SQL_SEARCH_URL",
+    "https://www.askyellow.nl/search_knowledge.php"
+)
 
 client = OpenAI(api_key=OPENAI_API_KEY)
+
 
 # =============================================================
 # 2. FASTAPI APP & CORS
@@ -63,11 +74,12 @@ app = FastAPI(title="YellowMind API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # TIP: later strakker zetten op askyellow.nl / shop.askyellow.nl
+    allow_origins=["*"],  # TIP: later beperken tot askyellow.nl / shop.askyellow.nl
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 # =============================================================
 # 3. HELPERS: FILE LOADING & SYSTEM PROMPT
@@ -78,28 +90,22 @@ def load_file(path: str) -> str:
     Lees een tekstbestand in als string.
     Als het bestand niet bestaat: geef een lege string terug (liever stille fout dan crash).
     """
+    full_path = os.path.join(BASE_DIR, path)
     try:
-        with open(path, "r", encoding="utf-8") as f:
+        with open(full_path, "r", encoding="utf-8") as f:
             return "\n" + f.read().strip() + "\n"
     except FileNotFoundError:
-        # Eventueel loggen:
-        print(f"⚠️ Yellowmind config file niet gevonden: {path}")
+        print(f"⚠️ Yellowmind config file niet gevonden: {full_path}")
         return ""
 
 
 def build_system_prompt() -> str:
     """
-    Bouwt de volledige YellowMind system prompt door alle txt-blokken aan elkaar te plakken.
-    Volgorde:
-    1) Master prompt (prioriteit, stijl, voorbeelden, mode-kiezen)
-    2) Core identity / mission / values / communicatie
-    3) Parents-profielen + mix-logic
-    4) Behaviour & safety
-    5) Knowledge & product regels
-    6) Tone & modes
+    Bouwt de volledige YellowMind system prompt door alle txt-blokken
+    in yellowmind/ bij elkaar te plakken.
     """
 
-    base = "yellowmind/"  # Aanpassen als jullie map-structuur anders is
+    base = "yellowmind/"
     system_prompt = ""
 
     # 1) SYSTEM / MASTER PROMPT
@@ -257,7 +263,9 @@ def detect_hints(question: str) -> dict:
         context_type = "general"
 
     # Branding / socials / AskYellow
-    if any(x in q for x in ["askyellow", "yellowmind", "branding", "logo", "stijl", "instagram", "insta", "tiktok", "facebook", "caption", "post", "reel", "short"]):
+    if any(x in q for x in ["askyellow", "yellowmind", "branding", "logo", "stijl",
+                            "instagram", "insta", "tiktok", "facebook", "caption",
+                            "post", "reel", "short"]):
         if mode_hint is None:
             mode_hint = "branding"
         context_type = "askyellow_shop"
@@ -276,7 +284,7 @@ def detect_hints(question: str) -> dict:
 
 
 # =============================================================
-# 6. HELPERS: OPENAI CALL
+# 6. HELPERS: OPENAI CALL (MET MODEL-ROUTING)
 # =============================================================
 
 def call_yellowmind_llm(
@@ -292,15 +300,12 @@ def call_yellowmind_llm(
     antwoord formuleren in AskYellow-stijl.
     """
 
-    # ------------------------------------------------------
-    # 1) SYSTEM MESSAGES OPBOUWEN
-    # ------------------------------------------------------
     messages = []
 
-    # 1.1 — Master system prompt
+    # SYSTEM: volledige brein + regels
     messages.append({"role": "system", "content": SYSTEM_PROMPT})
 
-    # 1.2 — Knowledge blocks (JSON + SQL)
+    # SYSTEM: ASKYELLOW_KNOWLEDGE (JSON KB + SQL KB)
     knowledge_parts = []
 
     if kb_answer:
@@ -318,10 +323,12 @@ def call_yellowmind_llm(
         )
 
     if knowledge_parts:
-        knowledge_block = "[ASKYELLOW_KNOWLEDGE]\n" + "\n\n".join(knowledge_parts)
-        messages.append({"role": "system", "content": knowledge_block})
+        messages.append({
+            "role": "system",
+            "content": "[ASKYELLOW_KNOWLEDGE]\n" + "\n\n".join(knowledge_parts)
+        })
 
-    # 1.3 — Backend hints (mode, context, user_type, taal)
+    # SYSTEM HINTS
     if hints is None:
         hints = {}
 
@@ -329,20 +336,21 @@ def call_yellowmind_llm(
         hints.setdefault("user_language", language)
 
     hint_lines = [f"{k}: {v}" for k, v in hints.items() if v]
-
     if hint_lines:
-        hints_block = "[BACKEND_HINTS]\n" + "\n".join(f"- {line}" for line in hint_lines)
-        messages.append({"role": "system", "content": hints_block})
+        messages.append({
+            "role": "system",
+            "content": "[BACKEND_HINTS]\n" + "\n".join(f"- {line}" for line in hint_lines)
+        })
 
-    # 1.4 — User message (de eigenlijke vraag)
+    # USER
     messages.append({"role": "user", "content": question})
 
-    # ------------------------------------------------------
-    # 2) MODEL ROUTING – AUTOMATISCH MODEL KIEZEN
-    # ------------------------------------------------------
-    def is_complex(q: str) -> bool:
-        q = q.lower()
+    # -----------------------------
+    # 🔮 MODEL ROUTING
+    # -----------------------------
+    q = question.lower()
 
+    def is_complex(q: str) -> bool:
         triggers = [
             "bereken", "analyseer", "statistiek", "hoe werkt",
             "code", "programmeer", "debug", "foutmelding",
@@ -350,34 +358,30 @@ def call_yellowmind_llm(
         ]
         if len(q) > 180:
             return True
-
         return any(t in q for t in triggers)
 
-    # default model van env (bijv. o3-mini)
     selected_model = YELLOWMIND_MODEL
 
-    # zwaar model voor complexe vragen
-    if is_complex(question):
+    # Complexe vragen → opschalen naar gpt-4.1
+    if is_complex(q):
         selected_model = "gpt-4.1"
 
     print(f"🤖 Model geselecteerd voor deze vraag: {selected_model}")
 
-    # ------------------------------------------------------
-    # 3) OPENAI CALL (RESPONSES API)
-    # ------------------------------------------------------
+    # -----------------------------
+    # OPENAI CALL
+    # -----------------------------
     response = client.responses.create(
         model=selected_model,
         input=messages,
     )
 
-    # Responses API format → text extraheren
     try:
         text = response.output[0].content[0].text
     except Exception:
         text = str(response)
 
     return text.strip()
-
 
 
 # =============================================================
@@ -396,7 +400,7 @@ async def health():
 
 @app.head("/")
 async def head_root():
-    # Fix voor 405 HEAD spam in logs
+    # Fix voor 405 HEAD spam in logs (Render health checks)
     return Response(status_code=200)
 
 
@@ -413,12 +417,12 @@ async def ask_ai(request: Request):
         )
 
     # 1️⃣ Identity / origin quick win (bijv. “Wie ben jij?”)
-    #    We proberen eerst met (question, language); als jullie oudere versie heeft 1 arg,
-    #    valt hij terug op alleen question.
     identity_answer = None
     try:
+        # Nieuwe variant met (question, language)
         identity_answer = try_identity_origin_answer(question, language)
     except TypeError:
+        # Oudere variant die alleen question verwacht
         try:
             identity_answer = try_identity_origin_answer(question)
         except Exception as e:
