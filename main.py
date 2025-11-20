@@ -339,6 +339,57 @@ async def ask_ai(request: Request):
     }
 
 
+
+# =============================================================
+# 7b. LOGGING ENDPOINT — NIEUW
+# =============================================================
+
+@app.post("/log")
+async def log_ai_answer(request: Request):
+    """
+    Ontvangt een log van de frontend:
+    { "question": "...", "answer": "..." }
+    Slaat dit op in yellowmind_logs op Strato.
+    """
+
+    import mysql.connector
+    from datetime import datetime
+
+    data = await request.json()
+
+    question = data.get("question", "").strip()
+    answer = data.get("answer", "").strip()
+
+    if not question or not answer:
+        return {"status": "error", "message": "Vraag of antwoord ontbreekt."}
+
+    try:
+        conn = mysql.connector.connect(
+            host="database-5018961190.webspace-host.com",
+            user="dbu1764978",
+            password="AskYellow_20_25",
+            database="dbs14939670"
+        )
+        cur = conn.cursor()
+
+        sql = """
+            INSERT INTO yellowmind_logs (question, answer, timestamp, approved)
+            VALUES (%s, %s, NOW(), 0)
+        """
+        cur.execute(sql, (question, answer))
+        conn.commit()
+
+        cur.close()
+        conn.close()
+
+        print("🟡 LOG OPSLAGEN:", question[:40], "→", answer[:40])
+        return {"status": "ok", "message": "Log opgeslagen."}
+
+    except Exception as e:
+        print("❌ LOG ERROR:", e)
+        return {"status": "error", "message": str(e)}
+
+
 # =============================================================
 # 8. LOCAL DEV
 # =============================================================
