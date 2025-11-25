@@ -522,7 +522,7 @@ async def ask_ai(request: Request):
             "kb_used": False,
             "sql_used": False,
             "sql_score": None,
-            "hints": {}
+            "hints": hints
 
 # =============================================================
 # 8. ADMIN AUTH
@@ -549,7 +549,7 @@ def admin_auth(key: str):
             "kb_used": False,
             "sql_used": True,
             "sql_score": sql_match["score"],
-            "hints": {}
+            "hints": hints
         }
 
     # JSON KNOWLEDGE ENGINE
