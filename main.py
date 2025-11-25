@@ -500,7 +500,25 @@ def admin_stats(key: str, db=Depends(get_db)):
     conv = cur.fetchone()[0]
     cur.execute("SELECT COUNT(*) FROM messages")
     msgs = cur.fetchone()[0]
-    return {"users": users, "conversations": conv, "messages": msgs}
+    return {"users": users, "conversations": conv, "messages": msgs}@app.get("/admin/stats")
+def admin_stats(key: str, db=Depends(get_db)):
+    admin_auth(key)
+    cur = db.cursor()
+
+    # Aantal messages
+    cur.execute("SELECT COUNT(*) FROM messages")
+    msgs = cur.fetchone()[0]
+
+    # Aantal verschillende conversation_id’s
+    cur.execute("SELECT COUNT(DISTINCT conversation_id) FROM messages")
+    convs = cur.fetchone()[0]
+
+    return {
+        "users": 0,  # nog geen users-tabel in live
+        "conversations": convs,
+        "messages": msgs,
+    }
+
 ADMIN_KEY = "Yellow_Master_Mind!"
 
 def admin_auth(key: str):
