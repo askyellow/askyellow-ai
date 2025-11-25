@@ -498,8 +498,6 @@ async def ask_ai(request: Request):
 
         # sla uservraag + antwoord op
         save_message(conn, conv_id, "user", question)
-        save_message(conn, conv_id, "assistant", final_answer)
-
         conn.commit()
         conn.close()
     except Exception as e:
@@ -548,6 +546,7 @@ async def ask_ai(request: Request):
 
     start_ai = time.time()
     final_answer, raw_output = call_yellowmind_llm(
+        save_message(conn, conv_id, "assistant", final_answer)
         question, language, kb_answer, sql_match, hints
     )
 
