@@ -1,13 +1,16 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, JSONResponse
 from dotenv import load_dotenv
 from openai import OpenAI
+from datetime import datetime
 import os
 import uvicorn
 import requests
 import unicodedata
 import re
+import sqlite3
+
 
 # =============================================================
 # 0. PAD & KNOWLEDGE ENGINE IMPORTS
@@ -68,6 +71,38 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# =============================================================
+# SIMPLE SQLITE DB FOR ADMIN LOGGING
+# =============================================================
+
+DB_PATH = os.path.join(BASE_DIR, "yellowmind_admin.db")
+
+def get_db():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+def init_db():
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            conversation_id INTEGER NOT NULL,
+            sender TEXT NOT NULL,
+            text TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )
+        """
+    )
+    conn.commit()
+    conn.close()
+
+@app.on_event("startup")
+def on_startup():
+    init_db()
 
 
 # =============================================================
@@ -466,6 +501,28 @@ def admin_stats(key: str, db=Depends(get_db)):
     cur.execute("SELECT COUNT(*) FROM messages")
     msgs = cur.fetchone()[0]
     return {"users": users, "conversations": conv, "messages": msgs}
+ADMIN_KEY = "Yellow_Master_Mind!"
+
+def admin_auth(key: str):
+    if key != ADMIN_KEY:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+@app.get("/admin/messages")
+def admin_messages(key: str, db=Depends(get_db)):
+    ...
+
+@app.get("/admin/conversations")
+def admin_conversations(key: str, db=Depends(get_db)):
+    ...
+
+@app.get("/admin/conversation/{conv_id}")
+def admin_conversation(conv_id: int, key: str, db=Depends(get_db)):
+    ...
+
+@app.get("/admin/stats")
+def admin_stats(key: str, db=Depends(get_db)):
+    ...
+
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
