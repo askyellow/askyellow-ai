@@ -459,7 +459,7 @@ async def ask_ai(request: Request):
 
 
 # =============================================================
-# 9. ADMIN ENDPOINTS (protected)
+# 9. ADMIN ENDPOINTS (clean & fixed)
 # =============================================================
 from fastapi import HTTPException, Depends
 
@@ -480,68 +480,36 @@ def admin_messages(key: str, db=Depends(get_db)):
 def admin_conversations(key: str, db=Depends(get_db)):
     admin_auth(key)
     cur = db.cursor()
-    cur.execute("SELECT * FROM conversations ORDER BY created_at DESC")
+    # lijst alle conversation_id’s op
+    cur.execute("""
+        SELECT conversation_id, COUNT(*) AS messages, 
+               MIN(created_at) AS started, 
+               MAX(created_at) AS last_message
+        FROM messages
+        GROUP BY conversation_id
+        ORDER BY last_message DESC
+    """)
     return [dict(r) for r in cur.fetchall()]
-
-@app.get("/admin/conversation/{conv_id}")
-def admin_conversation(conv_id: str, key: str, db=Depends(get_db)):
-    admin_auth(key)
-    cur = db.cursor()
-    cur.execute("SELECT * FROM messages WHERE conversation_id = ? ORDER BY id ASC", (conv_id,))
-    return [dict(r) for r in cur.fetchall()]
-
-@app.get("/admin/stats")
-def admin_stats(key: str, db=Depends(get_db)):
-    admin_auth(key)
-    cur = db.cursor()
-    cur.execute("SELECT COUNT(*) FROM users")
-    users = cur.fetchone()[0]
-    cur.execute("SELECT COUNT(*) FROM conversations")
-    conv = cur.fetchone()[0]
-    cur.execute("SELECT COUNT(*) FROM messages")
-    msgs = cur.fetchone()[0]
-    return {"users": users, "conversations": conv, "messages": msgs}@app.get("/admin/stats")
-def admin_stats(key: str, db=Depends(get_db)):
-    admin_auth(key)
-    cur = db.cursor()
-
-    # Aantal messages
-    cur.execute("SELECT COUNT(*) FROM messages")
-    msgs = cur.fetchone()[0]
-
-    # Aantal verschillende conversation_id’s
-    cur.execute("SELECT COUNT(DISTINCT conversation_id) FROM messages")
-    convs = cur.fetchone()[0]
-
-    return {
-        "users": 0,  # nog geen users-tabel in live
-        "conversations": convs,
-        "messages": msgs,
-    }
-
-ADMIN_KEY = "Yellow_Master_Mind!"
-
-def admin_auth(key: str):
-    if key != ADMIN_KEY:
-        raise HTTPException(status_code=403, detail="Forbidden")
-
-@app.get("/admin/messages")
-def admin_messages(key: str, db=Depends(get_db)):
-    ...
-
-@app.get("/admin/conversations")
-def admin_conversations(key: str, db=Depends(get_db)):
-    ...
 
 @app.get("/admin/conversation/{conv_id}")
 def admin_conversation(conv_id: int, key: str, db=Depends(get_db)):
-    ...
+    admin_auth(key)
+    cur = db.cursor()
+    cur.execute("""
+        SELECT *
+        FROM messages
+        WHERE conversation_id = ?
+        ORDER BY id ASC
+    """, (conv_id,))
+    return [dict(r) for r in cur.fetchall()]
 
 @app.get("/admin/stats")
 def admin_stats(key: str, db=Depends(get_db)):
-    ...
+    admin_auth(key)
+    cur = db.cursor()
 
+    # total messages
+    cur.execute("SELECT COUNT(*) FROM messages")
+    total_messages = cur.fetchone()[0]
 
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8000))
-    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True)
+    #
