@@ -4,3 +4,4 @@ python-dotenv
 openai
 mysql-connector-python
 requests
+psycopg2-binary
