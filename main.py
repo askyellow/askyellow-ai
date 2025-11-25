@@ -488,103 +488,75 @@ async def ask_ai(request: Request):
     if not session_id:
         session_id = "anon-" + secrets.token_hex(8)
 
-    # =============================================================
-    # CONVERSATIE & MESSAGE LOGGING → PostgreSQL
-    # =============================================================
-    try:
-        conn = get_db_conn()
-        user_id = get_or_create_user(conn, session_id)
-        conv_id = get_or_create_conversation(conn, user_id)
+   # =============================================================
+# CONVERSATIE & MESSAGE LOGGING → PostgreSQL
+# =============================================================
+try:
+    conn = get_db_conn()
+    user_id = get_or_create_user(conn, session_id)
+    conv_id = get_or_create_conversation(conn, user_id)
 
-        # sla uservraag + antwoord op
-        save_message(conn, conv_id, "user", question)
-        conn.commit()
-        conn.close()
-    except Exception as e:
-        # logging mag nooit het antwoord breken
-        print("❌ DB logging error:", e)
+    # sla uservraag op
+    save_message(conn, conv_id, "user", question)
 
-    if not question:
-        return JSONResponse(
-            status_code=400,
-            content={"error": "Geen vraag ontvangen."},
-        )
+except Exception as e:
+    print("❌ DB logging error:", e)
 
-    # QUICK IDENTITY
-    identity_answer = try_identity_origin_answer(question, language)
-    if identity_answer:
-        return {
-            "answer": identity_answer,
-            "output": [],
-            "source": "identity_origin",
-            "kb_used": False,
-            "sql_used": False,
-            "sql_score": None,
-            "hints": {}
-        }
-
-    # SQL KNOWLEDGE
-    sql_match = search_sql_knowledge(question)
-    if sql_match and sql_match["score"] >= 60:
-        return {
-            "answer": sql_match["answer"],
-            "output": [],
-            "source": "sql",
-            "kb_used": False,
-            "sql_used": True,
-            "sql_score": sql_match["score"],
-            "hints": {}
-        }
-
-    # JSON KNOWLEDGE ENGINE
-    try:
-        kb_answer = match_question(question, KNOWLEDGE_ENTRIES)
-    except Exception:
-        kb_answer = None
-
-    hints = detect_hints(question)
-
-    start_ai = time.time()
-    final_answer, raw_output = call_yellowmind_llm(
-        save_message(conn, conv_id, "assistant", final_answer)
-        question, language, kb_answer, sql_match, hints
+if not question:
+    return JSONResponse(
+        status_code=400,
+        content={"error": "Geen vraag ontvangen."},
     )
 
-    # =============================================================
-    # PERFORMANCE LOGGING
-    # =============================================================
-    sql_ms = 0
-    kb_ms = 0
-    ai_ms = 0
-    total_ms = 0
-
-    # O3/Responses API heeft soms stats blocks → probeer ze te lezen
-    try:
-        for block in raw_output:
-            if hasattr(block, "type") and block.type == "response.stats":
-                sql_ms = getattr(block, "sql_ms", 0)
-                kb_ms = getattr(block, "kb_ms", 0)
-                total_ms = getattr(block, "total_ms", 0)
-    except:
-        pass
-
-    status = detect_cold_start(sql_ms, kb_ms, ai_ms, total_ms)
-
-    print(f"[STATUS] {status}")
-    print(f"[SQL] {sql_ms} ms")
-    print(f"[KB] {kb_ms} ms")
-    print(f"[AI] {ai_ms} ms")
-    print(f"[TOTAL] {total_ms} ms")
-
+# QUICK IDENTITY
+identity_answer = try_identity_origin_answer(question, language)
+if identity_answer:
     return {
-        "answer": final_answer,
-        "output": raw_output,
-        "source": "yellowmind_llm",
-        "kb_used": bool(kb_answer),
-        "sql_used": bool(sql_match),
-        "sql_score": sql_match["score"] if sql_match else None,
-        "hints": hints
+        "answer": identity_answer,
+        "output": [],
+        "source": "identity_origin",
+        "kb_used": False,
+        "sql_used": False,
+        "sql_score": None,
+        "hints": {}
     }
+
+# SQL KNOWLEDGE
+sql_match = search_sql_knowledge(question)
+if sql_match and sql_match["score"] >= 60:
+    return {
+        "answer": sql_match["answer"],
+        "output": [],
+        "source": "sql",
+        "kb_used": False,
+        "sql_used": True,
+        "sql_score": sql_match["score"],
+        "hints": {}
+    }
+
+# JSON KNOWLEDGE ENGINE
+try:
+    kb_answer = match_question(question, KNOWLEDGE_ENTRIES)
+except Exception:
+    kb_answer = None
+
+hints = detect_hints(question)
+
+# AI CALL
+start_ai = time.time()
+final_answer, raw_output = call_yellowmind_llm(
+    question, language, kb_answer, sql_match, hints
+)
+
+# ASSISTANT MESSAGE OPSLAAN
+try:
+    conn = get_db_conn()
+    save_message(conn, conv_id, "assistant", final_answer)
+    conn.commit()
+    conn.close()
+except:
+    print("❌ Kon assistant message niet opslaan")
+
 # =============================================================
 # 8. LOCAL DEV
 # =============================================================
