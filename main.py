@@ -487,6 +487,7 @@ async def ask_ai(request: Request):
     if not session_id:
         session_id = "anon-" + secrets.token_hex(8)
 
+    # PostgreSQL logging
     try:
         conn = get_db_conn()
         user_id = get_or_create_user(conn, session_id)
@@ -500,14 +501,27 @@ async def ask_ai(request: Request):
 
     identity_answer = try_identity_origin_answer(question, language)
     if identity_answer:
-        return {"answer": identity_answer,"output":[],"source":"identity_origin",
-                "kb_used":False,"sql_used":False,"sql_score":None,"hints":{}}
+        return {
+            "answer": identity_answer,
+            "output": [],
+            "source": "identity_origin",
+            "kb_used": False,
+            "sql_used": False,
+            "sql_score": None,
+            "hints": {}
+        }
 
     sql_match = search_sql_knowledge(question)
     if sql_match and sql_match["score"] >= 60:
-        return {"answer": sql_match["answer"],"output":[],"source":"sql",
-                "kb_used":False,"sql_used":True,"sql_score":sql_match["score"],
-                "hints":{}}
+        return {
+            "answer": sql_match["answer"],
+            "output": [],
+            "source": "sql",
+            "kb_used": False,
+            "sql_used": True,
+            "sql_score": sql_match["score"],
+            "hints": {}
+        }
 
     try:
         kb_answer = match_question(question, KNOWLEDGE_ENTRIES)
