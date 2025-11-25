@@ -549,7 +549,7 @@ def admin_auth(key: str):
             "kb_used": False,
             "sql_used": True,
             "sql_score": sql_match["score"],
-            "hints": hints
+            "hints": hints,
         }
 
     # JSON KNOWLEDGE ENGINE
@@ -598,7 +598,7 @@ def admin_auth(key: str):
         "kb_used": bool(kb_answer),
         "sql_used": bool(sql_match),
         "sql_score": sql_match["score"] if sql_match else None,
-        "hints": hints
+        "hints": hints,
     }
 # =============================================================
 # 8. LOCAL DEV
