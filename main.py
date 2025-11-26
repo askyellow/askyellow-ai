@@ -169,14 +169,20 @@ def get_or_create_user(conn, session_id: str) -> int:
 
 
 def get_or_create_conversation(conn, user_id: int) -> int:
-    """Pak de meest recente conversatie van deze user, of maak een nieuwe."""
+    """
+    Zorgt ervoor dat een user maar 1 gesprek heeft.
+    Bestaat er al een conversatie voor deze user? Gebruik die.
+    Zo niet: maak er één aan.
+    """
     cur = conn.cursor()
+
+    # 1) bestaat er al een conversatie voor deze user?
     cur.execute(
         """
         SELECT id
         FROM conversations
         WHERE user_id = %s
-        ORDER BY last_message_at DESC
+        ORDER BY id ASC
         LIMIT 1
         """,
         (user_id,),
@@ -184,14 +190,20 @@ def get_or_create_conversation(conn, user_id: int) -> int:
     row = cur.fetchone()
     if row:
         conv_id = row["id"]
+        # optioneel: last_message_at updaten bij elke interactie
         cur.execute(
             "UPDATE conversations SET last_message_at = NOW() WHERE id = %s",
             (conv_id,),
         )
         return conv_id
 
+    # 2) geen conversatie → maak er één aan
     cur.execute(
-        "INSERT INTO conversations (user_id) VALUES (%s) RETURNING id",
+        """
+        INSERT INTO conversations (user_id)
+        VALUES (%s)
+        RETURNING id
+        """,
         (user_id,),
     )
     conv_id = cur.fetchone()["id"]
@@ -206,7 +218,26 @@ def save_message(conn, conversation_id: int, role: str, content: str):
         VALUES (%s, %s, %s)
         """,
         (conversation_id, role, content),
+    )def save_message(conn, conversation_id: int, role: str, content: str):
+    cur = conn.cursor()
+    # message opslaan
+    cur.execute(
+        """
+        INSERT INTO messages (conversation_id, role, content)
+        VALUES (%s, %s, %s)
+        """,
+        (conversation_id, role, content),
     )
+    # last_message_at bijwerken
+    cur.execute(
+        """
+        UPDATE conversations
+        SET last_message_at = NOW()
+        WHERE id = %s
+        """,
+        (conversation_id,),
+    )
+
 
 
 # =============================================================
