@@ -212,14 +212,6 @@ def get_or_create_conversation(conn, user_id: int) -> int:
 
 def save_message(conn, conversation_id: int, role: str, content: str):
     cur = conn.cursor()
-    cur.execute(
-        """
-        INSERT INTO messages (conversation_id, role, content)
-        VALUES (%s, %s, %s)
-        """,
-        (conversation_id, role, content),
-   def save_message(conn, conversation_id: int, role: str, content: str):
-    cur = conn.cursor()
     # message opslaan
     cur.execute(
         """
@@ -237,6 +229,7 @@ def save_message(conn, conversation_id: int, role: str, content: str):
         """,
         (conversation_id,),
     )
+
 
 
 
