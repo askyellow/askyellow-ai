@@ -922,15 +922,23 @@ def search_sql_knowledge(question: str):
     best_score = 0
 
     for row in data:
-        score = compute_match_score(question, row.get("question",""))
-        if score > best_score:
-            best_score = score
-            best = {
-                "id": row.get("id"),
-                "question": row.get("question",""),
-                "answer": row.get("answer",""),
-                "score": score
-            }
+    # 🔒 robuust: werkt voor dict én string
+    row_question = (
+        row.get("question") if isinstance(row, dict)
+        else row
+    )
+
+    score = compute_match_score(question, row_question or "")
+
+    if score > best_score:
+        best_score = score
+        best = {
+            "id": row.get("id") if isinstance(row, dict) else None,
+            "question": row_question or "",
+            "answer": row.get("answer") if isinstance(row, dict) else "",
+            "score": score
+        }
+
 
     if best:
         print(f"🧠 SQL BEST MATCH SCORE={best_score}")
