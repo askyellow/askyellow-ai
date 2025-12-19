@@ -23,6 +23,8 @@ from psycopg2.extras import RealDictCursor
 from chat_engine.db import get_conn
 from chat_engine.utils import get_logical_date
 
+from fastapi import APIRouter, Request
+
 # =============================================================
 # SHOPIFY FUNCTIONS
 # =============================================================
@@ -546,6 +548,8 @@ async def tool_image_generate(request: Request, payload: dict):
         "prompt": prompt,
         "url": url,
     }
+
+router = APIRouter()
 
 @router.post("/start")
 async def chat_start(request: Request):
