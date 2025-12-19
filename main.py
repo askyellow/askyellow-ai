@@ -921,7 +921,7 @@ def search_sql_knowledge(question: str):
     best = None
     best_score = 0
 
-    for row in data:
+for row in data:
     # 🔒 robuust: werkt voor dict én string
     row_question = (
         row.get("question") if isinstance(row, dict)
@@ -938,6 +938,7 @@ def search_sql_knowledge(question: str):
             "answer": row.get("answer") if isinstance(row, dict) else "",
             "score": score
         }
+
 
 
     if best:
