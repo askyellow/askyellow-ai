@@ -552,6 +552,28 @@ def chat_start(data: dict):
     session_id = data.get("session_id")
     if not session_id:
         return {"messages": []}
+from fastapi import APIRouter, Request, HTTPException
+
+router = APIRouter()
+
+@router.post("/start")
+async def chat_start(request: Request):
+    data = await request.json()
+
+    session_id = (
+        data.get("session_id")
+        or data.get("sessionId")
+        or data.get("sid")
+    )
+
+    if not session_id:
+        raise HTTPException(status_code=400, detail="session_id ontbreekt")
+
+    # hier kun je later DB-logica doen (optioneel)
+    return {
+        "success": True,
+        "session_id": session_id
+    }
 
     conn = get_db_conn()
     cur = conn.cursor(cursor_factory=RealDictCursor)
