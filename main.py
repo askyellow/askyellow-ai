@@ -547,24 +547,18 @@ async def tool_image_generate(request: Request, payload: dict):
         "url": url,
     }
 
-@app.post("/chat/start")
-def chat_start(data: dict):
-    session_id = data.get("session_id")
-    if not session_id:
-        return {"messages": []}
-from fastapi import APIRouter, Request, HTTPException
-
-router = APIRouter()
-
 @router.post("/start")
 async def chat_start(request: Request):
     data = await request.json()
+    session_id = data.get("session_id")
 
-    session_id = (
-        data.get("session_id")
-        or data.get("sessionId")
-        or data.get("sid")
-    )
+    if not session_id:
+        return {"success": False}
+
+    return {
+        "success": True,
+        "session_id": session_id
+    }
 
     if not session_id:
         raise HTTPException(status_code=400, detail="session_id ontbreekt")
@@ -1067,6 +1061,13 @@ def detect_cold_start(sql_ms, kb_ms, ai_ms, total_ms):
         return "⏱️ Slow total"
     return "✓ warm"
 
+# =============================================================
+    # DATABASE LOGGING (SAFE)
+    # =============================================================
+    try:
+        _log_message_safe(session_id, question, final_answer)
+    except Exception as e:
+        print("❌ chat_engine logging faalde:", e)
 
 @app.post("/ask")
 async def ask_ai(request: Request):
@@ -1172,14 +1173,7 @@ async def ask_ai(request: Request):
     status = detect_cold_start(sql_ms, kb_ms, ai_ms, total_ms)
     print(f"[STATUS] {status} | SQL {sql_ms} ms | KB {kb_ms} ms | AI {ai_ms} ms")
 
-    # =============================================================
-    # DATABASE LOGGING (SAFE)
-    # =============================================================
-    try:
-        _log_message_safe(session_id, question, final_answer)
-    except Exception as e:
-        print("❌ chat_engine logging faalde:", e)
-
+    
     # =============================================================
     # RESPONSE
     # =============================================================
