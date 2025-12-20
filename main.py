@@ -182,6 +182,57 @@ def serve_chat_page():
     base = os.path.dirname(os.path.abspath(__file__))
     return FileResponse(os.path.join(base, "static/chat/chat.html"))
 
+@app.get("/chat/history")
+async def chat_history(session_id: str):
+    conn = get_db_conn()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+
+    # user ophalen
+    cur.execute(
+        "SELECT id FROM users WHERE session_id = %s",
+        (session_id,)
+    )
+    user = cur.fetchone()
+    if not user:
+        conn.close()
+        return {"messages": []}
+
+    # conversation ophalen
+    cur.execute(
+        """
+        SELECT id
+        FROM conversations
+        WHERE user_id = %s
+        ORDER BY id ASC
+        LIMIT 1
+        """,
+        (user["id"],)
+    )
+    conv = cur.fetchone()
+    if not conv:
+        conn.close()
+        return {"messages": []}
+
+    # berichten ophalen
+    cur.execute(
+        """
+        SELECT role, content
+        FROM messages
+        WHERE conversation_id = %s
+        ORDER BY created_at ASC
+        """,
+        (conv["id"],)
+    )
+
+    rows = cur.fetchall()
+    conn.close()
+
+    return {
+        "messages": [
+            {"role": r["role"], "content": r["content"]}
+            for r in rows
+        ]
+    }
 
 @app.get("/health")
 def health():
@@ -1084,6 +1135,23 @@ async def ask_ai(request: Request):
     # -----------------------------
     if not final_answer:
         final_answer = "⚠️ Geen geldig antwoord beschikbaar."
+
+# =============================================================
+# SAVE CHAT HISTORY
+# =============================================================
+try:
+    conn = get_db_conn()
+
+    user_id = get_or_create_user(conn, session_id)
+    conv_id = get_or_create_conversation(conn, user_id)
+
+    save_message(conn, conv_id, "user", question)
+    save_message(conn, conv_id, "assistant", final_answer)
+
+    conn.commit()
+    conn.close()
+except Exception as e:
+    print("⚠️ Chat history save failed:", e)
 
     # =============================================================
     # PERFORMANCE LOGGING (optioneel)
