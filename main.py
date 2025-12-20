@@ -1082,30 +1082,17 @@ async def ask_ai(request: Request):
     hints = {}
 
     # =============================================================
-    # 1. QUICK IDENTITY
+    # 1–3. CONTEXT GATHERING (no early answers)
     # =============================================================
     identity_answer = try_identity_origin_answer(question, language)
-    if identity_answer:
-        final_answer = identity_answer
 
-    # =============================================================
-    # 2. SQL KNOWLEDGE (context only)
-    # =============================================================
     sql_match = search_sql_knowledge(question)
 
+    try:
+        kb_answer = match_question(question, KNOWLEDGE_ENTRIES)
+    except Exception:
+        kb_answer = None
 
-    # =============================================================
-    # 3. JSON KNOWLEDGE ENGINE
-    # =============================================================
-    if not final_answer:
-        try:
-            kb_answer = match_question(question, KNOWLEDGE_ENTRIES)
-            if kb_answer:
-                final_answer = kb_answer
-        except Exception:
-            kb_answer = None
-
-    hints = detect_hints(question)
 
     # =============================================================
     # 4. LLM FALLBACK
