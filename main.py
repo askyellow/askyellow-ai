@@ -1140,16 +1140,16 @@ async def ask_ai(request: Request):
     # SAVE CHAT HISTORY
     # =============================================================
     try:
-    conn = get_db_conn()
+        conn = get_db_conn()
 
-    user_id = get_or_create_user(conn, session_id)
-    conv_id = get_or_create_conversation(conn, user_id)
+        user_id = get_or_create_user(conn, session_id)
+        conv_id = get_or_create_conversation(conn, user_id)
 
-    save_message(conn, conv_id, "user", question)
-    save_message(conn, conv_id, "assistant", final_answer)
+        save_message(conn, conv_id, "user", question)
+        save_message(conn, conv_id, "assistant", final_answer)
 
-    conn.commit()
-    conn.close()
+        conn.commit()
+        conn.close()
     except Exception as e:
     print("⚠️ Chat history save failed:", e)
 
