@@ -1089,12 +1089,10 @@ async def ask_ai(request: Request):
         final_answer = identity_answer
 
     # =============================================================
-    # 2. SQL KNOWLEDGE
+    # 2. SQL KNOWLEDGE (context only)
     # =============================================================
-    if not final_answer:
-        sql_match = search_sql_knowledge(question)
-        if sql_match and sql_match.get("score", 0) >= 60:
-            final_answer = sql_match["answer"]
+    sql_match = search_sql_knowledge(question)
+
 
     # =============================================================
     # 3. JSON KNOWLEDGE ENGINE
