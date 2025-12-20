@@ -1151,7 +1151,7 @@ async def ask_ai(request: Request):
         conn.commit()
         conn.close()
     except Exception as e:
-    print("⚠️ Chat history save failed:", e)
+        print("⚠️ Chat history save failed:", e)
 
     # =============================================================
     # PERFORMANCE LOGGING (optioneel)
