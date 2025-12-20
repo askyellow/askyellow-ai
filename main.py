@@ -1136,10 +1136,10 @@ async def ask_ai(request: Request):
     if not final_answer:
         final_answer = "⚠️ Geen geldig antwoord beschikbaar."
 
-# =============================================================
-# SAVE CHAT HISTORY
-# =============================================================
-try:
+    # =============================================================
+    # SAVE CHAT HISTORY
+    # =============================================================
+    try:
     conn = get_db_conn()
 
     user_id = get_or_create_user(conn, session_id)
@@ -1150,7 +1150,7 @@ try:
 
     conn.commit()
     conn.close()
-except Exception as e:
+    except Exception as e:
     print("⚠️ Chat history save failed:", e)
 
     # =============================================================
