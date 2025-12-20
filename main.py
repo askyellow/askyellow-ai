@@ -700,6 +700,63 @@ def on_startup():
     # Zorg dat de tabellen bestaan bij het starten van de app
     init_db()
 
+    from passlib.context import CryptContext
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+
+def verify_password(plain_password, hashed_password):
+    return pwd_context.verify(plain_password, hashed_password)
+
+
+@app.post("/auth/login")
+async def login(payload: dict):
+    email = (payload.get("email") or "").lower().strip()
+    password = payload.get("password") or ""
+
+    if not email or not password:
+        raise HTTPException(status_code=400, detail="Email en wachtwoord verplicht")
+
+    conn = get_db_conn()
+    cur = conn.cursor()
+
+    # gebruiker ophalen
+    cur.execute(
+        "SELECT id, password_hash, first_name FROM auth_users WHERE email = %s",
+        (email,)
+    )
+    user = cur.fetchone()
+
+    if not user or not verify_password(password, user["password_hash"]):
+        conn.close()
+        raise HTTPException(status_code=401, detail="Ongeldige inloggegevens")
+
+    # nieuwe sessie
+    session_id = str(uuid.uuid4())
+    expires_at = datetime.utcnow() + timedelta(days=7)
+
+    cur.execute(
+        """
+        INSERT INTO user_sessions (session_id, user_id, expires_at)
+        VALUES (%s, %s, %s)
+        """,
+        (session_id, user["id"], expires_at)
+    )
+
+    cur.execute(
+        "UPDATE auth_users SET last_login = NOW() WHERE id = %s",
+        (user["id"],)
+    )
+
+    conn.commit()
+    conn.close()
+
+    return {
+        "success": True,
+        "session": session_id,
+        "first_name": user["first_name"]
+    }
+
 
 def get_or_create_user(conn, session_id: str) -> int:
     """Zoek user op session_id, maak anders een nieuwe aan."""
