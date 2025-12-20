@@ -759,6 +759,61 @@ async def login(payload: dict):
         "first_name": user["first_name"]
     }
 
+@app.post("/auth/register")
+async def register(payload: dict):
+    email = (payload.get("email") or "").lower().strip()
+    password = payload.get("password") or ""
+    first_name = (payload.get("first_name") or "").strip()
+    last_name = (payload.get("last_name") or "").strip()
+
+    if not email or not password or not first_name or not last_name:
+        raise HTTPException(status_code=400, detail="Alle velden zijn verplicht")
+
+    if len(password) < 6:
+        raise HTTPException(status_code=400, detail="Wachtwoord te kort")
+
+    conn = get_db_conn()
+    cur = conn.cursor()
+
+    # bestaat email al?
+    cur.execute("SELECT id FROM auth_users WHERE email = %s", (email,))
+    if cur.fetchone():
+        conn.close()
+        raise HTTPException(status_code=409, detail="Email bestaat al")
+
+    password_hash = pwd_context.hash(password)
+
+    # gebruiker aanmaken
+    cur.execute(
+        """
+        INSERT INTO auth_users (email, password_hash, first_name, last_name)
+        VALUES (%s, %s, %s, %s)
+        RETURNING id
+        """,
+        (email, password_hash, first_name, last_name)
+    )
+    user_id = cur.fetchone()["id"]
+
+    # auto-login sessie
+    session_id = str(uuid.uuid4())
+    expires_at = datetime.utcnow() + timedelta(days=7)
+
+    cur.execute(
+        """
+        INSERT INTO user_sessions (session_id, user_id, expires_at)
+        VALUES (%s, %s, %s)
+        """,
+        (session_id, user_id, expires_at)
+    )
+
+    conn.commit()
+    conn.close()
+
+    return {
+        "success": True,
+        "session": session_id,
+        "first_name": first_name
+    }
 
 def get_or_create_user(conn, session_id: str) -> int:
     """Zoek user op session_id, maak anders een nieuwe aan."""
