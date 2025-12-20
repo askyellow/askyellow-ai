@@ -162,7 +162,6 @@ SQL_SEARCH_URL = os.getenv(
 
 app = FastAPI(title="YellowMind API")
 
-app.include_router(chat_router, prefix="/chat")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -1042,14 +1041,6 @@ def detect_cold_start(sql_ms, kb_ms, ai_ms, total_ms):
     if total_ms > 5000:
         return "⏱️ Slow total"
     return "✓ warm"
-
-# =============================================================
-    # DATABASE LOGGING (SAFE)
-    # =============================================================
-    try:
-        _log_message_safe(session_id, question, final_answer)
-    except Exception as e:
-        print("❌ chat_engine logging faalde:", e)
 
 @app.post("/ask")
 async def ask_ai(request: Request):
