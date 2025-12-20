@@ -24,6 +24,8 @@ from chat_engine.db import get_conn
 from chat_engine.utils import get_logical_date
 
 from fastapi import APIRouter, Request
+from passlib.context import CryptContext
+
 
 # =============================================================
 # SHOPIFY FUNCTIONS
