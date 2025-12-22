@@ -183,7 +183,7 @@ def serve_chat_page():
     base = os.path.dirname(os.path.abspath(__file__))
     return FileResponse(os.path.join(base, "static/chat/chat.html"))
 
-    @app.get("/chat/history")
+@app.get("/chat/history")
 async def chat_history(session_id: str):
     conn = get_db_conn()
     cur = conn.cursor()
@@ -781,9 +781,10 @@ def get_auth_user_from_session(conn, session_id: str):
         return None
 
     return {
-        "id": row[0],
-        "first_name": row[1]
-    }
+    "id": row["id"],
+    "first_name": row["first_name"]
+}
+
 
 
 def get_or_create_user_for_auth(conn, auth_user_id: int, session_id: str):
