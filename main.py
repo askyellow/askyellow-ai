@@ -769,7 +769,7 @@ def get_or_create_user_for_auth(conn, auth_user_id: int, session_id: str):
     )
     row = cur.fetchone()
     if row:
-        return row[0]
+        return row["id"]
 
     # 2️⃣ zo niet: maak er één aan
     cur.execute(
@@ -811,7 +811,7 @@ def get_or_create_user_for_auth(conn, auth_user_id: int, session_id: str):
     )
     conn.commit()
     row = cur.fetchone()
-    return row[0] if not isinstance(row, dict) else row["id"]
+    return row["id"] if not isinstance(row, dict) else row["id"]
 
 @app.post("/auth/register")
 async def register(payload: dict):
