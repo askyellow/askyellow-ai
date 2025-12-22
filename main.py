@@ -193,6 +193,9 @@ async def chat_history(session_id: str):
         conn.close()
         return {"messages": []}
 
+    owner_id = get_or_create_user_for_auth(conn, auth_user["id"], session_id)
+
+
     cur.execute("""
         SELECT m.role, m.content
         FROM conversations c
@@ -753,6 +756,31 @@ def get_auth_user_from_session(conn, session_id: str):
     row = cur.fetchone()
     return {"id": row["id"], "first_name": row["first_name"]} if row else None
 
+    def get_or_create_user_for_auth(conn, auth_user_id: int, session_id: str):
+    cur = conn.cursor()
+
+    # 1) Bestaat er al een users-row gekoppeld aan dit auth account?
+    #    (we gebruiken session_id als stabiele key: "auth-<id>")
+    stable_sid = f"auth-{auth_user_id}"
+
+    cur.execute("SELECT id FROM users WHERE session_id = %s", (stable_sid,))
+    row = cur.fetchone()
+    if row:
+        return row[0] if not isinstance(row, dict) else row["id"]
+
+    # 2) Anders maken we 'm aan
+    cur.execute(
+        """
+        INSERT INTO users (session_id)
+        VALUES (%s)
+        RETURNING id
+        """,
+        (stable_sid,),
+    )
+    conn.commit()
+    row = cur.fetchone()
+    return row[0] if not isinstance(row, dict) else row["id"]
+
 @app.post("/auth/register")
 async def register(payload: dict):
     email = (payload.get("email") or "").lower().strip()
@@ -1218,9 +1246,9 @@ async def ask_ai(request: Request):
         auth_user = get_auth_user_from_session(conn, session_id)
 
         if auth_user:
-            owner_id = auth_user["id"]  # ingelogde gebruiker
+            owner_id = get_or_create_user_for_auth(conn, auth_user["id"], session_id)  # ✅ users.id
         else:
-            owner_id = get_or_create_user(conn, session_id)  # gast
+            owner_id = get_or_create_user(conn, session_id)  # gast → users.id
 
         conv_id = get_or_create_conversation(conn, owner_id)
 
