@@ -186,54 +186,28 @@ def serve_chat_page():
 @app.get("/chat/history")
 async def chat_history(session_id: str):
     conn = get_db_conn()
-    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur = conn.cursor()
 
-    # user ophalen
-    cur.execute(
-        "SELECT id FROM users WHERE session_id = %s",
-        (session_id,)
-    )
-    user = cur.fetchone()
-    if not user:
+    auth_user = get_auth_user_from_session(conn, session_id)
+    if not auth_user:
         conn.close()
         return {"messages": []}
 
-    # conversation ophalen
-    cur.execute(
-        """
-        SELECT id
-        FROM conversations
-        WHERE user_id = %s
-        ORDER BY id ASC
-        LIMIT 1
-        """,
-        (user["id"],)
-    )
-    conv = cur.fetchone()
-    if not conv:
-        conn.close()
-        return {"messages": []}
+    cur.execute("""
+        SELECT m.role, m.content
+        FROM conversations c
+        JOIN messages m ON m.conversation_id = c.id
+        WHERE c.user_id = %s
+        ORDER BY m.created_at ASC
+    """, (auth_user["id"],))
 
-    # berichten ophalen
-    cur.execute(
-        """
-        SELECT role, content
-        FROM messages
-        WHERE conversation_id = %s
-        ORDER BY created_at ASC
-        """,
-        (conv["id"],)
-    )
+    messages = [
+        {"role": role, "content": content}
+        for role, content in cur.fetchall()
+    ]
 
-    rows = cur.fetchall()
     conn.close()
-
-    return {
-        "messages": [
-            {"role": r["role"], "content": r["content"]}
-            for r in rows
-        ]
-    }
+    return {"messages": messages}
 
 @app.get("/health")
 def health():
@@ -767,6 +741,18 @@ async def login(payload: dict):
         "first_name": user["first_name"]
     }
 
+def get_auth_user_from_session(conn, session_id: str):
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT au.id, au.first_name
+        FROM user_sessions us
+        JOIN auth_users au ON au.id = us.user_id
+        WHERE us.session_id = %s
+          AND us.expires_at > NOW()
+    """, (session_id,))
+    row = cur.fetchone()
+    return {"id": row[0], "first_name": row[1]} if row else None
+
 @app.post("/auth/register")
 async def register(payload: dict):
     email = (payload.get("email") or "").lower().strip()
@@ -840,34 +826,30 @@ def get_or_create_user(conn, session_id: str) -> int:
     return new_id
 
 
-def get_or_create_conversation(conn, user_id: int) -> int:
-    """
-    Zorgt ervoor dat een user maar 1 gesprek heeft.
-    Bestaat er al een conversatie voor deze user? Gebruik die.
-    Zo niet: maak er één aan.
-    """
+ def get_or_create_conversation(conn, owner_id: int):
     cur = conn.cursor()
 
-    # 1) bestaat er al een conversatie voor deze user?
-    cur.execute(
-        """
+    cur.execute("""
         SELECT id
         FROM conversations
         WHERE user_id = %s
-        ORDER BY id ASC
+        ORDER BY started_at DESC
         LIMIT 1
-        """,
-        (user_id,),
-    )
+    """, (owner_id,))
+
     row = cur.fetchone()
     if row:
-        conv_id = row["id"]
-        # optioneel: last_message_at updaten bij elke interactie
-        cur.execute(
-            "UPDATE conversations SET last_message_at = NOW() WHERE id = %s",
-            (conv_id,),
-        )
-        return conv_id
+        return row[0]
+
+    cur.execute("""
+        INSERT INTO conversations (user_id)
+        VALUES (%s)
+        RETURNING id
+    """, (owner_id,))
+
+    conn.commit()
+    return cur.fetchone()[0]
+
 
     # 2) geen conversatie → maak er één aan
     cur.execute(
@@ -1241,7 +1223,13 @@ async def ask_ai(request: Request):
     try:
         conn = get_db_conn()
 
-        user_id = get_or_create_user(conn, session_id)
+        auth_user = get_auth_user_from_session(conn, session_id)
+
+if auth_user:
+    owner_id = auth_user["id"]     # ingelogde gebruiker
+else:
+    owner_id = get_or_create_user(conn, session_id)  # gast
+
         conv_id = get_or_create_conversation(conn, user_id)
 
         save_message(conn, conv_id, "user", question)
