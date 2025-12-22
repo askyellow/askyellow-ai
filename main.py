@@ -850,20 +850,7 @@ def get_or_create_user(conn, session_id: str) -> int:
     conn.commit()
     return cur.fetchone()[0]
 
-
-    # 2) geen conversatie → maak er één aan
-    cur.execute(
-        """
-        INSERT INTO conversations (user_id)
-        VALUES (%s)
-        RETURNING id
-        """,
-        (user_id,),
-    )
-    conv_id = cur.fetchone()["id"]
-    return conv_id
-
-
+       
 def save_message(conn, conversation_id: int, role: str, content: str):
     cur = conn.cursor()
     # message opslaan
