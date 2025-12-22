@@ -1209,31 +1209,29 @@ async def ask_ai(request: Request):
     if not final_answer:
         final_answer = "⚠️ Geen geldig antwoord beschikbaar."
 
-  # ==========================================================
-# SAVE CHAT HISTORY
-# ==========================================================
-try:
-    conn = get_db_conn()
+        # ==========================================================
+    # SAVE CHAT HISTORY
+    # ==========================================================
+    try:
+        conn = get_db_conn()
 
-    auth_user = get_auth_user_from_session(conn, session_id)
+        auth_user = get_auth_user_from_session(conn, session_id)
 
-    if auth_user:
-        owner_id = auth_user["id"]  # ingelogde gebruiker
-    else:
-        owner_id = get_or_create_user(conn, session_id)  # gast
+        if auth_user:
+            owner_id = auth_user["id"]  # ingelogde gebruiker
+        else:
+            owner_id = get_or_create_user(conn, session_id)  # gast
 
-    conv_id = get_or_create_conversation(conn, owner_id)
+        conv_id = get_or_create_conversation(conn, owner_id)
 
-    save_message(conn, conv_id, "user", question)
-    save_message(conn, conv_id, "assistant", final_answer)
+        save_message(conn, conv_id, "user", question)
+        save_message(conn, conv_id, "assistant", final_answer)
 
-    conn.commit()
-    conn.close()
+        conn.commit()
+        conn.close()
 
-except Exception as e:
-    print("⚠️ Chat history save failed:", e)
-
-
+    except Exception as e:
+        print("⚠️ Chat history save failed:", e)
 
     # =============================================================
     # PERFORMANCE LOGGING (optioneel)
@@ -1242,19 +1240,18 @@ except Exception as e:
     kb_ms = 0
     total_ms = ai_ms
 
-try:
-    for block in raw_output or []:
-          if hasattr(block, "type") and block.type == "response.stats":
+    try:
+        for block in raw_output or []:
+            if hasattr(block, "type") and block.type == "response.stats":
                 sql_ms = getattr(block, "sql_ms", 0)
                 kb_ms = getattr(block, "kb_ms", 0)
                 total_ms = getattr(block, "total_ms", ai_ms)
     except Exception:
         pass
 
-        status = detect_cold_start(sql_ms, kb_ms, ai_ms, total_ms)
-        print(f"[STATUS] {status} | SQL {sql_ms} ms | KB {kb_ms} ms | AI {ai_ms} ms")
+    status = detect_cold_start(sql_ms, kb_ms, ai_ms, total_ms)
+    print(f"[STATUS] {status} | SQL {sql_ms} ms | KB {kb_ms} ms | AI {ai_ms} ms")
 
-    
     # =============================================================
     # RESPONSE
     # =============================================================
