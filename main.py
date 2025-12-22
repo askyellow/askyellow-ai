@@ -194,25 +194,20 @@ async def chat_history(session_id: str):
         return {"messages": []}
 
     owner_id = get_or_create_user_for_auth(conn, auth_user["id"], session_id)
+    conv_id = get_or_create_conversation(conn, owner_id)
 
     cur.execute("""
-        SELECT m.role, m.content
-        FROM conversations c
-        JOIN messages m ON m.conversation_id = c.id
-        WHERE c.user_id = %s
-        ORDER BY m.created_at ASC
-    """, (owner_id,))
+        SELECT role, content
+        FROM messages
+        WHERE conversation_id = %s
+        ORDER BY created_at ASC
+    """, (conv_id,))
 
     rows = cur.fetchall()
     conn.close()
 
-    messages = [
-        {"role": r[0], "content": r[1]}
-        for r in rows
-    ]
-
+    messages = [{"role": r[0], "content": r[1]} for r in rows]
     return {"messages": messages}
-
 
     owner_id = get_or_create_user_for_auth(conn, auth_user["id"], session_id)
 
@@ -773,10 +768,11 @@ def get_auth_user_from_session(conn, session_id: str):
         FROM user_sessions us
         JOIN auth_users au ON au.id = us.user_id
         WHERE us.session_id = %s
-          AND us.expires_at > NOW()
+        AND us.expires_at > NOW()
     """, (session_id,))
     row = cur.fetchone()
-    return {"id": row["id"], "first_name": row["1"]} if row else None
+    return {"id": row[0], "first_name": row[1]} if row else None
+
 
 def get_or_create_user_for_auth(conn, auth_user_id: int, session_id: str):
     cur = conn.cursor()
@@ -818,7 +814,8 @@ def get_or_create_user_for_auth(conn, auth_user_id: int, session_id: str):
     )
     conn.commit()
     row = cur.fetchone()
-    return row["id"] if isinstance(row, dict) else row[0]
+    row = cur.fetchone()
+    return row[0]
 
 
     # 2) Anders maken we 'm aan
