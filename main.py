@@ -776,7 +776,7 @@ def get_auth_user_from_session(conn, session_id: str):
           AND us.expires_at > NOW()
     """, (session_id,))
     row = cur.fetchone()
-    return {"id": row["id"], "first_name": row["first_name"]} if row else None
+    return {"id": row["id"], "first_name": row["1"]} if row else None
 
 def get_or_create_user_for_auth(conn, auth_user_id: int, session_id: str):
     cur = conn.cursor()
