@@ -756,17 +756,32 @@ def get_auth_user_from_session(conn, session_id: str):
     row = cur.fetchone()
     return {"id": row["id"], "first_name": row["first_name"]} if row else None
 
-    def get_or_create_user_for_auth(conn, auth_user_id: int, session_id: str):
+
+def get_or_create_user_for_auth(conn, auth_user_id: int, session_id: str):
     cur = conn.cursor()
 
-    # 1) Bestaat er al een users-row gekoppeld aan dit auth account?
-    #    (we gebruiken session_id als stabiele key: "auth-<id>")
     stable_sid = f"auth-{auth_user_id}"
 
-    cur.execute("SELECT id FROM users WHERE session_id = %s", (stable_sid,))
+    cur.execute(
+        "SELECT id FROM users WHERE session_id = %s",
+        (stable_sid,)
+    )
     row = cur.fetchone()
     if row:
-        return row[0] if not isinstance(row, dict) else row["id"]
+        return row["id"] if isinstance(row, dict) else row[0]
+
+    cur.execute(
+        """
+        INSERT INTO users (session_id)
+        VALUES (%s)
+        RETURNING id
+        """,
+        (stable_sid,)
+    )
+    conn.commit()
+    row = cur.fetchone()
+    return row["id"] if isinstance(row, dict) else row[0]
+
 
     # 2) Anders maken we 'm aan
     cur.execute(
