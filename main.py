@@ -202,7 +202,7 @@ async def chat_history(session_id: str):
         JOIN messages m ON m.conversation_id = c.id
         WHERE c.user_id = %s
         ORDER BY m.created_at ASC
-    """, (owner_id["id"],))
+    """, (owner_id,))
 
     messages = [
         {"role": role, "content": content}
