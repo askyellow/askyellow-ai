@@ -211,7 +211,7 @@ rows = cur.fetchall()
 conn.close()
 
 messages = [{"role": r[0], "content": r[1]} for r in rows]
-return {"messages": messages}
+    return {"messages": messages}
 
 
 @app.get("/health")
