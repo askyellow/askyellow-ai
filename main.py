@@ -195,18 +195,17 @@ async def chat_history(session_id: str):
 
     owner_id = get_or_create_user_for_auth(conn, auth_user["id"], session_id)
 
-
     conv_id = get_or_create_conversation(conn, owner_id)
-
-cur.execute(
-    """
-    SELECT role, content
-    FROM messages
-    WHERE conversation_id = %s
-    ORDER BY created_at ASC
-    """,
-    (conv_id,)
-)
+    
+    cur.execute(
+        """
+        SELECT role, content
+        FROM messages
+        WHERE conversation_id = %s
+        ORDER BY created_at ASC
+        """,
+        (conv_id,)
+    )
 
 rows = cur.fetchall()
 conn.close()
