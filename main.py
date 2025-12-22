@@ -705,6 +705,12 @@ def on_startup():
     from passlib.context import CryptContext
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+def normalize_password(pw: str) -> str:
+    # bcrypt accepteert max 72 bytes
+    pw_bytes = pw.encode("utf-8")
+    if len(pw_bytes) > 72:
+        pw_bytes = pw_bytes[:72]
+    return pw_bytes.decode("utf-8", errors="ignore")
 
 
 def verify_password(plain_password, hashed_password):
@@ -729,7 +735,9 @@ async def login(payload: dict):
     )
     user = cur.fetchone()
 
-    if not user or not verify_password(password, user["password_hash"]):
+    safe_password = normalize_password(password)
+
+    if not user or not verify_password(safe_password, user["password_hash"]):
         conn.close()
         raise HTTPException(status_code=401, detail="Ongeldige inloggegevens")
 
@@ -781,7 +789,8 @@ async def register(payload: dict):
         conn.close()
         raise HTTPException(status_code=409, detail="Email bestaat al")
 
-    password_hash = pwd_context.hash(password)
+    safe_password = normalize_password(password)
+    password_hash = pwd_context.hash(safe_password)
 
     # gebruiker aanmaken
     cur.execute(
