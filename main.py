@@ -1291,7 +1291,12 @@ async def ask_ai(request: Request):
 
         conv_id = get_or_create_conversation(conn, owner_id)
 
+        print("DEBUG SAVE USER:", repr(question))
+
         save_message(conn, conv_id, "user", question)
+
+        print("DEBUG SAVE AI:", repr(final_answer))
+
         save_message(conn, conv_id, "assistant", final_answer)
 
         conn.commit()
