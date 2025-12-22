@@ -1210,22 +1210,22 @@ async def ask_ai(request: Request):
         final_answer = "⚠️ Geen geldig antwoord beschikbaar."
 
    # ==========================================================
-# SAVE CHAT HISTORY
-# ==========================================================
-    try:
-        conn = get_db_conn()
+   # SAVE CHAT HISTORY
+   # ==========================================================
+   try:
+       conn = get_db_conn()
 
-        auth_user = get_auth_user_from_session(conn, session_id)
+       auth_user = get_auth_user_from_session(conn, session_id)
 
-        if auth_user:
+       if auth_user:
             owner_id = auth_user["id"]          # ingelogde gebruiker
-        else:
+       else:
            owner_id = get_or_create_user(conn, session_id)  # gast
 
-            conv_id = get_or_create_conversation(conn, owner_id)
+           conv_id = get_or_create_conversation(conn, owner_id)
 
-            save_message(conn, conv_id, "user", question)
-            save_message(conn, conv_id, "assistant", final_answer)
+           save_message(conn, conv_id, "user", question)
+           save_message(conn, conv_id, "assistant", final_answer)
 
         conn.commit()
         conn.close()
