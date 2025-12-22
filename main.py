@@ -196,21 +196,24 @@ async def chat_history(session_id: str):
     owner_id = get_or_create_user_for_auth(conn, auth_user["id"], session_id)
 
 
-    cur.execute("""
-        SELECT m.role, m.content
-        FROM conversations c
-        JOIN messages m ON m.conversation_id = c.id
-        WHERE c.user_id = %s
-        ORDER BY m.created_at ASC
-    """, (owner_id,))
+    conv_id = get_or_create_conversation(conn, owner_id)
 
-    messages = [
-        {"role": role, "content": content}
-        for role, content in cur.fetchall()
-    ]
+cur.execute(
+    """
+    SELECT role, content
+    FROM messages
+    WHERE conversation_id = %s
+    ORDER BY created_at ASC
+    """,
+    (conv_id,)
+)
 
-    conn.close()
-    return {"messages": messages}
+rows = cur.fetchall()
+conn.close()
+
+messages = [{"role": r[0], "content": r[1]} for r in rows]
+return {"messages": messages}
+
 
 @app.get("/health")
 def health():
@@ -756,20 +759,21 @@ def get_auth_user_from_session(conn, session_id: str):
     row = cur.fetchone()
     return {"id": row["id"], "first_name": row["first_name"]} if row else None
 
-
 def get_or_create_user_for_auth(conn, auth_user_id: int, session_id: str):
     cur = conn.cursor()
 
     stable_sid = f"auth-{auth_user_id}"
 
+    # 1️⃣ bestaat er al een users-record?
     cur.execute(
         "SELECT id FROM users WHERE session_id = %s",
         (stable_sid,)
     )
     row = cur.fetchone()
     if row:
-        return row["id"]   # 🔥 altijd dict
+        return row[0]
 
+    # 2️⃣ zo niet: maak er één aan
     cur.execute(
         """
         INSERT INTO users (session_id)
@@ -778,9 +782,11 @@ def get_or_create_user_for_auth(conn, auth_user_id: int, session_id: str):
         """,
         (stable_sid,)
     )
+    user_id = cur.fetchone()[0]
     conn.commit()
-    row = cur.fetchone()
-    return row["id"]       # 🔥 altijd dict
+
+    return user_id
+   # 🔥 altijd dict
 
 
     cur.execute(
