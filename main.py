@@ -1242,17 +1242,17 @@ except Exception as e:
     kb_ms = 0
     total_ms = ai_ms
 
-    try:
-        for block in raw_output or []:
-            if hasattr(block, "type") and block.type == "response.stats":
+try:
+    for block in raw_output or []:
+          if hasattr(block, "type") and block.type == "response.stats":
                 sql_ms = getattr(block, "sql_ms", 0)
                 kb_ms = getattr(block, "kb_ms", 0)
                 total_ms = getattr(block, "total_ms", ai_ms)
     except Exception:
         pass
 
-    status = detect_cold_start(sql_ms, kb_ms, ai_ms, total_ms)
-    print(f"[STATUS] {status} | SQL {sql_ms} ms | KB {kb_ms} ms | AI {ai_ms} ms")
+        status = detect_cold_start(sql_ms, kb_ms, ai_ms, total_ms)
+        print(f"[STATUS] {status} | SQL {sql_ms} ms | KB {kb_ms} ms | AI {ai_ms} ms")
 
     
     # =============================================================
