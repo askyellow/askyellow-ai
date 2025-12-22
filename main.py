@@ -704,7 +704,7 @@ def on_startup():
 
     from passlib.context import CryptContext
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_context = CryptContext(schemes=["bcrypt_sha256"], deprecated="auto")
 def normalize_password(pw: str) -> str:
     # bcrypt accepteert max 72 bytes
     pw_bytes = pw.encode("utf-8")
