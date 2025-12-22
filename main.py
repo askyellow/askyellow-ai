@@ -825,27 +825,32 @@ def get_or_create_user(conn, session_id: str) -> int:
     new_id = cur.fetchone()["id"]
     return new_id
 
-
- def get_or_create_conversation(conn, owner_id: int):
+def get_or_create_conversation(conn, owner_id: int):
     cur = conn.cursor()
 
-    cur.execute("""
+    cur.execute(
+        """
         SELECT id
         FROM conversations
         WHERE user_id = %s
         ORDER BY started_at DESC
         LIMIT 1
-    """, (owner_id,))
+        """,
+        (owner_id,),
+    )
 
     row = cur.fetchone()
     if row:
         return row[0]
 
-    cur.execute("""
+    cur.execute(
+        """
         INSERT INTO conversations (user_id)
         VALUES (%s)
         RETURNING id
-    """, (owner_id,))
+        """,
+        (owner_id,),
+    )
 
     conn.commit()
     return cur.fetchone()[0]
