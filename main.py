@@ -768,7 +768,20 @@ def get_or_create_user_for_auth(conn, auth_user_id: int, session_id: str):
     )
     row = cur.fetchone()
     if row:
-        return row["id"] if isinstance(row, dict) else row[0]
+        return row["id"]   # 🔥 altijd dict
+
+    cur.execute(
+        """
+        INSERT INTO users (session_id)
+        VALUES (%s)
+        RETURNING id
+        """,
+        (stable_sid,)
+    )
+    conn.commit()
+    row = cur.fetchone()
+    return row["id"]       # 🔥 altijd dict
+
 
     cur.execute(
         """
@@ -879,12 +892,23 @@ def get_or_create_conversation(conn, owner_id: int):
         ORDER BY started_at DESC
         LIMIT 1
         """,
-        (owner_id,),
+        (owner_id,)
     )
-
     row = cur.fetchone()
     if row:
-        return row[0]
+        return row["id"]
+
+    cur.execute(
+        """
+        INSERT INTO conversations (user_id)
+        VALUES (%s)
+        RETURNING id
+        """,
+        (owner_id,)
+    )
+    conn.commit()
+    row = cur.fetchone()
+    return row["id"]
 
     cur.execute(
         """
