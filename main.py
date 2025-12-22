@@ -751,7 +751,7 @@ def get_auth_user_from_session(conn, session_id: str):
           AND us.expires_at > NOW()
     """, (session_id,))
     row = cur.fetchone()
-    return {"id": row[0], "first_name": row[1]} if row else None
+    return {"id": row["id"], "first_name": row["first_name"]} if row else None
 
 @app.post("/auth/register")
 async def register(payload: dict):
