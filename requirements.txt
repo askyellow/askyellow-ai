@@ -8,3 +8,4 @@ PyJWT
 psycopg2-binary
 pytz
 passlib[bcrypt]
+bcrypt
