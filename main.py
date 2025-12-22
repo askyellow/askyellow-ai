@@ -195,6 +195,27 @@ async def chat_history(session_id: str):
 
     owner_id = get_or_create_user_for_auth(conn, auth_user["id"], session_id)
 
+    cur.execute("""
+        SELECT m.role, m.content
+        FROM conversations c
+        JOIN messages m ON m.conversation_id = c.id
+        WHERE c.user_id = %s
+        ORDER BY m.created_at ASC
+    """, (owner_id,))
+
+    rows = cur.fetchall()
+    conn.close()
+
+    messages = [
+        {"role": r[0], "content": r[1]}
+        for r in rows
+    ]
+
+    return {"messages": messages}
+
+
+    owner_id = get_or_create_user_for_auth(conn, auth_user["id"], session_id)
+
     conv_id = get_or_create_conversation(conn, owner_id)
 
     cur.execute(
