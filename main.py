@@ -183,7 +183,7 @@ def serve_chat_page():
     base = os.path.dirname(os.path.abspath(__file__))
     return FileResponse(os.path.join(base, "static/chat/chat.html"))
 
-@app.get("/chat/history")
+    @app.get("/chat/history")
 async def chat_history(session_id: str):
     conn = get_db_conn()
     cur = conn.cursor()
@@ -193,21 +193,26 @@ async def chat_history(session_id: str):
         conn.close()
         return {"messages": []}
 
-    owner_id = get_or_create_user_for_auth(conn, auth_user["id"], session_id)
-    conv_id = get_or_create_conversation(conn, owner_id)
+    owner_id = auth_user["id"]
 
     cur.execute("""
-        SELECT role, content
-        FROM messages
-        WHERE conversation_id = %s
-        ORDER BY created_at ASC
-    """, (conv_id,))
+        SELECT m.role, m.content
+        FROM conversations c
+        JOIN messages m ON m.conversation_id = c.id
+        WHERE c.user_id = %s
+        ORDER BY m.created_at ASC
+    """, (owner_id,))
 
     rows = cur.fetchall()
     conn.close()
 
-    messages = [{"role": r[0], "content": r[1]} for r in rows]
+    messages = [
+        {"role": r[0], "content": r[1]}
+        for r in rows
+    ]
+
     return {"messages": messages}
+
 
     owner_id = get_or_create_user_for_auth(conn, auth_user["id"], session_id)
 
@@ -768,10 +773,17 @@ def get_auth_user_from_session(conn, session_id: str):
         FROM user_sessions us
         JOIN auth_users au ON au.id = us.user_id
         WHERE us.session_id = %s
-        AND us.expires_at > NOW()
+          AND us.expires_at > NOW()
     """, (session_id,))
+
     row = cur.fetchone()
-    return {"id": row[0], "first_name": row[1]} if row else None
+    if not row:
+        return None
+
+    return {
+        "id": row[0],
+        "first_name": row[1]
+    }
 
 
 def get_or_create_user_for_auth(conn, auth_user_id: int, session_id: str):
