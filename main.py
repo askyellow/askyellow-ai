@@ -1219,7 +1219,7 @@ async def ask_ai(request: Request):
 
 if auth_user:
     owner_id = auth_user["id"]     # ingelogde gebruiker
-else:
+    else:
     owner_id = get_or_create_user(conn, session_id)  # gast
 
         conv_id = get_or_create_conversation(conn, user_id)
