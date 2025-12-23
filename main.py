@@ -1145,22 +1145,25 @@ def detect_hints(question: str):
         "user_type_hint": user
     }
 
+    # =============================================================
+# IMAGE INTENT DETECTION
+# =============================================================
+
+def wants_image(q: str) -> bool:
+    triggers = [
+        "genereer",
+        "afbeelding",
+        "plaatje",
+        "beeld",
+        "image",
+        "illustratie",
+    ]
+    return any(t in q.lower() for t in triggers)
+
 
 # =============================================================
 # 6. OPENAI CALL — FIXED FOR o3 RESPONSE FORMAT (SAFE)
 # =============================================================
-
-if wants_image(question):
-    img = client.images.generate(
-        model="gpt-image-1",
-        prompt=question,
-        size="1024x1024"
-    )
-    return {
-        "type": "image",
-        "url": img.data[0].url,
-        "prompt": question
-    }
 
 def call_yellowmind_llm(question, language, kb_answer, sql_match, hints):
     messages = []
@@ -1181,51 +1184,44 @@ def call_yellowmind_llm(question, language, kb_answer, sql_match, hints):
         )
 
     if knowledge_blocks:
-        messages.append({"role": "system", "content": "[ASKYELLOW_KNOWLEDGE]\n" + "\n\n".join(knowledge_blocks)})
+        messages.append({
+            "role": "system",
+            "content": "[ASKYELLOW_KNOWLEDGE]\n" + "\n\n".join(knowledge_blocks)
+        })
 
     if hints:
-        hint_text = "\n".join([f"- {k}: {v}" for k,v in hints.items() if v])
-        messages.append({"role": "system", "content": "[BACKEND_HINTS]\n" + hint_text})
+        hint_text = "\n".join(
+            [f"- {k}: {v}" for k, v in hints.items() if v]
+        )
+        messages.append({
+            "role": "system",
+            "content": "[BACKEND_HINTS]\n" + hint_text
+        })
 
     messages.append({"role": "user", "content": question})
 
     selected_model = YELLOWMIND_MODEL
     print(f"🤖 Model geselecteerd: {selected_model}")
 
-    # OpenAI Responses API
     llm_response = client.responses.create(
         model=selected_model,
         input=messages
     )
 
-    # =============================================================
-    # SAFE ANSWER EXTRACTOR
-    # =============================================================
-
     answer_text = None
 
     try:
-        # 1. Zoek expliciet naar assistant message blocks
         for block in llm_response.output:
-            if hasattr(block, "type") and block.type == "message":
-                if getattr(block, "role", None) == "assistant":
-                    try:
-                        answer_text = block.content[0].text
-                        break
-                    except:
-                        pass
+            if getattr(block, "type", None) == "message" and getattr(block, "role", None) == "assistant":
+                answer_text = block.content[0].text
+                break
 
-        # 2. Fallback: pak eerste block met content
         if not answer_text:
             for block in llm_response.output:
                 if hasattr(block, "content") and block.content:
-                    try:
-                        answer_text = block.content[0].text
-                        break
-                    except:
-                        pass
+                    answer_text = block.content[0].text
+                    break
 
-        # 3. Als er nog steeds geen tekst is:
         if not answer_text:
             answer_text = "⚠️ Geen leesbare assistant-output ontvangen."
 
@@ -1234,6 +1230,7 @@ def call_yellowmind_llm(question, language, kb_answer, sql_match, hints):
         answer_text = "⚠️ Ik kon het modelantwoord niet verwerken."
 
     return answer_text, llm_response.output
+
 
 # =============================================================
 # X. PERFORMANCE STATUS CHECK
@@ -1251,22 +1248,6 @@ def detect_cold_start(sql_ms, kb_ms, ai_ms, total_ms):
     if total_ms > 5000:
         return "⏱️ Slow total"
     return "✓ warm"
-
-
-# =============================================================
-# IMAGE INTENT DETECTION
-# =============================================================
-
-def wants_image(q: str) -> bool:
-    triggers = [
-        "genereer",
-        "afbeelding",
-        "plaatje",
-        "beeld",
-        "image",
-        "illustratie",
-    ]
-    return any(t in q.lower() for t in triggers)
 
 
 # =============================================================
@@ -1321,11 +1302,11 @@ async def ask_ai(request: Request):
         except Exception as e:
             return {
                 "type": "error",
-                "error": f"Image generation failed: {e}"
+                "error": str(e)
             }
 
     # -----------------------------
-    # Init
+    # INIT
     # -----------------------------
     final_answer = None
     raw_output = []
@@ -1333,12 +1314,8 @@ async def ask_ai(request: Request):
     sql_match = None
     hints = {}
 
-
-    # =============================================================
-    # 1–3. CONTEXT GATHERING (no early answers)
-    # =============================================================
+    # CONTEXT
     identity_answer = try_identity_origin_answer(question, language)
-
     sql_match = search_sql_knowledge(question)
 
     try:
@@ -1346,46 +1323,31 @@ async def ask_ai(request: Request):
     except Exception:
         kb_answer = None
 
+    # LLM
+    start_ai = time.time()
+    final_answer, raw_output = call_yellowmind_llm(
+        question, language, kb_answer, sql_match, hints
+    )
+    ai_ms = int((time.time() - start_ai) * 1000)
 
-    # =============================================================
-    # 4. LLM FALLBACK
-    # =============================================================
-    if not final_answer:
-        start_ai = time.time()
-        final_answer, raw_output = call_yellowmind_llm(
-            question, language, kb_answer, sql_match, hints
-        )
-        ai_ms = int((time.time() - start_ai) * 1000)
-    else:
-        ai_ms = 0
-
-    # -----------------------------
-    # Final safety
-    # -----------------------------
     if not final_answer:
         final_answer = "⚠️ Geen geldig antwoord beschikbaar."
 
-        # ==========================================================
+    # -----------------------------
     # SAVE CHAT HISTORY
-    # ==========================================================
+    # -----------------------------
     try:
         conn = get_db_conn()
 
         auth_user = get_auth_user_from_session(conn, session_id)
-
-        if auth_user:
-            owner_id = get_or_create_user_for_auth(conn, auth_user["id"], session_id)  # ✅ users.id
-        else:
-            owner_id = get_or_create_user(conn, session_id)  # gast → users.id
+        owner_id = (
+            get_or_create_user_for_auth(conn, auth_user["id"], session_id)
+            if auth_user
+            else get_or_create_user(conn, session_id)
+        )
 
         conv_id = get_or_create_conversation(conn, owner_id)
-
-        print("DEBUG SAVE USER:", repr(question))
-
         save_message(conn, conv_id, "user", question)
-
-        print("DEBUG SAVE AI:", repr(final_answer))
-
         save_message(conn, conv_id, "assistant", final_answer)
 
         conn.commit()
@@ -1394,34 +1356,13 @@ async def ask_ai(request: Request):
     except Exception as e:
         print("⚠️ Chat history save failed:", e)
 
-    # =============================================================
-    # PERFORMANCE LOGGING (optioneel)
-    # =============================================================
-    sql_ms = 0
-    kb_ms = 0
-    total_ms = ai_ms
+    status = detect_cold_start(0, 0, ai_ms, ai_ms)
+    print(f"[STATUS] {status} | AI {ai_ms} ms")
 
-    try:
-        for block in raw_output or []:
-            if hasattr(block, "type") and block.type == "response.stats":
-                sql_ms = getattr(block, "sql_ms", 0)
-                kb_ms = getattr(block, "kb_ms", 0)
-                total_ms = getattr(block, "total_ms", ai_ms)
-    except Exception:
-        pass
-
-    status = detect_cold_start(sql_ms, kb_ms, ai_ms, total_ms)
-    print(f"[STATUS] {status} | SQL {sql_ms} ms | KB {kb_ms} ms | AI {ai_ms} ms")
-
-    # =============================================================
-    # RESPONSE
-    # =============================================================
     return {
         "answer": final_answer,
         "output": raw_output,
-        "source": "yellowmind_llm",
-        "kb_used": bool(kb_answer),
-        "sql_used": bool(sql_match),
-        "sql_score": sql_match["score"] if sql_match else None,
-        "hints": hints
+        "source": "yellowmind_llm"
     }
+
+
