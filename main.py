@@ -999,7 +999,7 @@ def build_system_prompt() -> str:
     system_prompt = ""
 
     # SYSTEM CORE
-    system_prompt += load_file(base + "system/yellowmind_master_prompt_v2.txt")
+    system_prompt += load_file(base + "system/yellowmind_master_prompt_v3.txt")
     system_prompt += load_file(base + "core/core_identity.txt")
     system_prompt += load_file(base + "core/mission.txt")
     system_prompt += load_file(base + "core/values.txt")
