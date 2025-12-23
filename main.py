@@ -999,7 +999,7 @@ def build_system_prompt() -> str:
     system_prompt = ""
 
     # SYSTEM CORE
-    system_prompt += load_file(base + "system/yellowmind_master_prompt_v3.txt")
+    system_prompt += load_file(base + "system/yellowmind_master_prompt_v2.txt")
     system_prompt += load_file(base + "core/core_identity.txt")
     system_prompt += load_file(base + "core/mission.txt")
     system_prompt += load_file(base + "core/values.txt")
@@ -1150,6 +1150,18 @@ def detect_hints(question: str):
 # 6. OPENAI CALL — FIXED FOR o3 RESPONSE FORMAT (SAFE)
 # =============================================================
 
+if wants_image(question):
+    img = client.images.generate(
+        model="gpt-image-1",
+        prompt=question,
+        size="1024x1024"
+    )
+    return {
+        "type": "image",
+        "url": img.data[0].url,
+        "prompt": question
+    }
+
 def call_yellowmind_llm(question, language, kb_answer, sql_match, hints):
     messages = []
 
@@ -1246,6 +1258,17 @@ async def ask_ai(request: Request):
 
     question = (data.get("question") or "").strip()
     language = (data.get("language") or "nl").lower()
+
+    def wants_image(q: str) -> bool:
+    triggers = [
+        "genereer",
+        "afbeelding",
+        "plaatje",
+        "beeld",
+        "image",
+        "illustratie"
+    ]
+    return any(t in q.lower() for t in triggers)
 
     # -----------------------------
     # Session ID bepalen
