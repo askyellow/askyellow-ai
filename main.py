@@ -1252,23 +1252,33 @@ def detect_cold_start(sql_ms, kb_ms, ai_ms, total_ms):
         return "⏱️ Slow total"
     return "✓ warm"
 
-@app.post("/ask")
-async def ask_ai(request: Request):
-    data = await request.json()
 
-    question = (data.get("question") or "").strip()
-    language = (data.get("language") or "nl").lower()
+# =============================================================
+# IMAGE INTENT DETECTION
+# =============================================================
 
-    def wants_image(q: str) -> bool:
+def wants_image(q: str) -> bool:
     triggers = [
         "genereer",
         "afbeelding",
         "plaatje",
         "beeld",
         "image",
-        "illustratie"
+        "illustratie",
     ]
     return any(t in q.lower() for t in triggers)
+
+
+# =============================================================
+# MAIN ASK ENDPOINT
+# =============================================================
+
+@app.post("/ask")
+async def ask_ai(request: Request):
+    data = await request.json()
+
+    question = (data.get("question") or "").strip()
+    language = (data.get("language") or "nl").lower()
 
     # -----------------------------
     # Session ID bepalen
@@ -1294,6 +1304,27 @@ async def ask_ai(request: Request):
         )
 
     # -----------------------------
+    # IMAGE ROUTE (VOOR LLM)
+    # -----------------------------
+    if wants_image(question):
+        try:
+            img = client.images.generate(
+                model="gpt-image-1",
+                prompt=question,
+                size="1024x1024",
+            )
+            return {
+                "type": "image",
+                "url": img.data[0].url,
+                "prompt": question
+            }
+        except Exception as e:
+            return {
+                "type": "error",
+                "error": f"Image generation failed: {e}"
+            }
+
+    # -----------------------------
     # Init
     # -----------------------------
     final_answer = None
@@ -1301,6 +1332,7 @@ async def ask_ai(request: Request):
     kb_answer = None
     sql_match = None
     hints = {}
+
 
     # =============================================================
     # 1–3. CONTEXT GATHERING (no early answers)
