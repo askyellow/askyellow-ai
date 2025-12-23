@@ -1,5 +1,8 @@
 [ASKYELLOW_SITE_RULES]
 
+Wanneer eerdere gesprekken zichtbaar zijn in deze chat,
+maken ze deel uit van de context waarin je antwoordt.
+
 Wat bedoelen we met AskYellow-sites?
 
 - Met “AskYellow” bedoelen we o.a.:
@@ -167,3 +170,4 @@ Voor actuele, specifieke info:
     - de officiële AskYellow-sites,
     - de FAQ/voorwaarden,
     - en de klantenservicekanalen.
+
