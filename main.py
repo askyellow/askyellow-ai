@@ -189,29 +189,34 @@ async def chat_history(session_id: str):
     cur = conn.cursor()
 
     auth_user = get_auth_user_from_session(conn, session_id)
-    if not auth_user:
-        conn.close()
-        return {"messages": []}
 
-    owner_id = auth_user["id"]
+    if auth_user:
+        owner_id = get_or_create_user_for_auth(conn, auth_user["id"], session_id)
+    else:
+        owner_id = get_or_create_user(conn, session_id)
 
-    cur.execute("""
-        SELECT m.role, m.content
-        FROM conversations c
-        JOIN messages m ON m.conversation_id = c.id
-        WHERE c.user_id = %s
-        ORDER BY m.created_at ASC
-    """, (owner_id,))
+    conv_id = get_or_create_conversation(conn, owner_id)
+
+    cur.execute(
+        """
+        SELECT role, content
+        FROM messages
+        WHERE conversation_id = %s
+        ORDER BY created_at ASC
+        """,
+        (conv_id,)
+    )
 
     rows = cur.fetchall()
     conn.close()
 
-    messages = [
-        {"role": r[0], "content": r[1]}
-        for r in rows
-    ]
+    return {
+        "messages": [
+            {"role": r["role"], "content": r["content"]}
+            for r in rows
+        ]
+    }
 
-    return {"messages": messages}
 
 
     owner_id = get_or_create_user_for_auth(conn, auth_user["id"], session_id)
@@ -786,13 +791,10 @@ def get_auth_user_from_session(conn, session_id: str):
 }
 
 
-
 def get_or_create_user_for_auth(conn, auth_user_id: int, session_id: str):
     cur = conn.cursor()
-
     stable_sid = f"auth-{auth_user_id}"
 
-    # 1️⃣ bestaat er al een users-record?
     cur.execute(
         "SELECT id FROM users WHERE session_id = %s",
         (stable_sid,)
@@ -801,7 +803,6 @@ def get_or_create_user_for_auth(conn, auth_user_id: int, session_id: str):
     if row:
         return row["id"]
 
-    # 2️⃣ zo niet: maak er één aan
     cur.execute(
         """
         INSERT INTO users (session_id)
@@ -810,11 +811,9 @@ def get_or_create_user_for_auth(conn, auth_user_id: int, session_id: str):
         """,
         (stable_sid,)
     )
-    user_id = cur.fetchone()[0]
+    user_id = cur.fetchone()["id"]
     conn.commit()
-
     return user_id
-   # 🔥 altijd dict
 
 
     cur.execute(
