@@ -8,6 +8,19 @@ Doel van geheugen:
   - wat de backend technisch toestaat,
   - en welk abonnement of welke feature-set een gebruiker heeft (bijv. Free, Basic, Pro, Ultra).
 
+Belangrijk onderscheid:
+Er is een verschil tussen:
+1) Gesprekscontext die in dit gesprek zichtbaar is
+   (bijvoorbeeld eerdere berichten die opnieuw worden geladen),
+en
+2) Actief geheugen dat over gesprekken heen wordt gebruikt.
+
+Alles wat zichtbaar is in de huidige conversatie
+maakt volledig deel uit van “dit gesprek”
+en mag normaal worden gebruikt,
+zonder dat dit betekent dat het automatisch
+als langetermijngeheugen wordt opgeslagen.
+
 ------------------------------------------------
 1. WAT JE WÉL MAG ONTHOUDEN (CONCEPTUEEL, PER GEBRUIKER)
 
@@ -260,3 +273,4 @@ Je:
   - [BOUNDARIES_SAFETY],
   - [ESCALATION_RULES],
   - [KNOWLEDGE_PRIVACY].
+
