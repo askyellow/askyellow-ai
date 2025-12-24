@@ -930,41 +930,41 @@ async def request_password_reset(payload: dict):
         conn.commit()
 
         reset_link = f"https://askyellow.nl/reset.html?token={token}"
-try:
-    resend.emails.send({
-        "from": "AskYellow <no-reply@askyellow.nl>",
-        "to": email,
-        "subject": "Reset je wachtwoord voor AskYellow",
-        "html": f"""
-            <p>Hoi,</p>
 
-            <p>Via onderstaande link kun je een nieuw wachtwoord instellen:</p>
+        try:
+            resend.emails.send({
+                "from": "AskYellow <no-reply@askyellow.nl>",
+                "to": email,
+                "subject": "Reset je wachtwoord voor AskYellow",
+                "html": f"""
+                    <p>Hoi,</p>
 
-            <p>
-              <a href="{reset_link}">
-                Reset je wachtwoord
-              </a>
-            </p>
+                    <p>Via onderstaande link kun je een nieuw wachtwoord instellen:</p>
 
-            <p>Deze link is <strong>30 minuten geldig</strong>.</p>
+                    <p>
+                      <a href="{reset_link}">
+                        Reset je wachtwoord
+                      </a>
+                    </p>
 
-            <p>Groet,<br>
-            YellowMInd</p>
-        """
-    })
-except Exception as e:
-    # fallback: log link als mail faalt
-    print("❌ MAIL FAILED — RESET LINK:", reset_link)
-    print(e)
-        # ⬆️ NU: handmatig mailen
-        # ⬇️ LATER: mailservice koppelen
+                    <p>Deze link is <strong>30 minuten geldig</strong>.</p>
+
+                    <p>Groet,<br>
+                    YellowMind</p>
+                """
+            })
+        except Exception as e:
+            # fallback: log link als mail faalt
+            print("❌ MAIL FAILED — RESET LINK:", reset_link)
+            print(e)
 
     conn.close()
 
-    # ⚠️ ALTIJD hetzelfde antwoord (security)
+    # ⚠️ altijd hetzelfde antwoord (security)
     return {
         "message": "Als dit e-mailadres bestaat, ontvang je een reset-link."
     }
+
 
 def get_or_create_user(conn, session_id: str) -> int:
     """Zoek user op session_id, maak anders een nieuwe aan."""
