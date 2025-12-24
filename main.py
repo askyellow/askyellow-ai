@@ -11,7 +11,7 @@ import requests
 import unicodedata
 import re
 import secrets
-
+from resend import Resend
 from datetime import datetime, timedelta
 import uuid
 
@@ -26,6 +26,7 @@ from chat_engine.utils import get_logical_date
 from fastapi import APIRouter, Request
 from passlib.context import CryptContext
 
+resend = Resend(api_key=os.getenv("RESEND_API_KEY"))
 
 # =============================================================
 # SHOPIFY FUNCTIONS
@@ -929,7 +930,32 @@ async def request_password_reset(payload: dict):
         conn.commit()
 
         reset_link = f"https://askyellow.nl/reset.html?token={token}"
-        print("🔐 PASSWORD RESET LINK:", reset_link)
+try:
+    resend.emails.send({
+        "from": "AskYellow <no-reply@askyellow.nl>",
+        "to": email,
+        "subject": "Reset je wachtwoord voor AskYellow",
+        "html": f"""
+            <p>Hoi,</p>
+
+            <p>Via onderstaande link kun je een nieuw wachtwoord instellen:</p>
+
+            <p>
+              <a href="{reset_link}">
+                Reset je wachtwoord
+              </a>
+            </p>
+
+            <p>Deze link is <strong>30 minuten geldig</strong>.</p>
+
+            <p>Groet,<br>
+            YellowMInd</p>
+        """
+    })
+except Exception as e:
+    # fallback: log link als mail faalt
+    print("❌ MAIL FAILED — RESET LINK:", reset_link)
+    print(e)
         # ⬆️ NU: handmatig mailen
         # ⬇️ LATER: mailservice koppelen
 
