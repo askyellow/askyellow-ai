@@ -717,14 +717,6 @@ def on_startup():
 
     from passlib.context import CryptContext
 
-pwd_context = CryptContext(schemes=["bcrypt_sha256"], deprecated="auto")
-def normalize_password(pw: str) -> str:
-    # bcrypt accepteert max 72 bytes
-    pw_bytes = pw.encode("utf-8")
-    if len(pw_bytes) > 72:
-        pw_bytes = pw_bytes[:72]
-    return pw_bytes.decode("utf-8", errors="ignore")
-
 
 def verify_password(plain_password, hashed_password):
     return pwd_context.verify(plain_password, hashed_password)
@@ -876,6 +868,8 @@ async def register(payload: dict):
 
     safe_password = normalize_password(password)
     password_hash = pwd_context.hash(safe_password)
+    pwd_context.verify(password, password_hash)
+
 
     # gebruiker aanmaken
     cur.execute(
