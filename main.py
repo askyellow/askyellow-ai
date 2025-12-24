@@ -900,6 +900,12 @@ async def register(payload: dict):
         "session": session_id,
         "first_name": first_name
     }
+
+    def normalize_password(password: str) -> str:
+    if not password:
+        return ""
+    return password.strip()
+
 @app.post("/auth/request-password-reset")
 async def request_password_reset(payload: dict):
     email = (payload.get("email") or "").lower().strip()
