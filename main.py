@@ -35,6 +35,11 @@ pwd_context = CryptContext(
 
 resend.api_key = os.getenv("RESEND_API_KEY")
 
+def normalize_password(password: str) -> str:
+    if not password:
+        return ""
+    return password.strip()
+
 
 # =============================================================
 # SHOPIFY FUNCTIONS
@@ -841,12 +846,6 @@ def get_or_create_user_for_auth(conn, auth_user_id: int, session_id: str):
     conn.commit()
     row = cur.fetchone()
     return row["id"] if not isinstance(row, dict) else row["id"]
-
-    def normalize_password(password: str) -> str:
-    if not password:
-        return ""
-    return password.strip()
-
 
 @app.post("/auth/register")
 async def register(payload: dict):
