@@ -11,7 +11,7 @@ import requests
 import unicodedata
 import re
 import secrets
-import Resend
+import resend
 from datetime import datetime, timedelta
 import uuid
 
