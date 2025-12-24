@@ -740,8 +740,6 @@ async def login(payload: dict):
     )
     user = cur.fetchone()
 
-    safe_password = normalize_password(password)
-
     if not user or not verify_password(safe_password, user["password_hash"]):
         conn.close()
         raise HTTPException(status_code=401, detail="Ongeldige inloggegevens")
