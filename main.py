@@ -965,6 +965,49 @@ async def request_password_reset(payload: dict):
     return {
         "message": "Als dit e-mailadres bestaat, ontvang je een reset-link."
     }
+@app.post("/auth/reset-password")
+async def reset_password(payload: dict):
+    token = payload.get("token")
+    new_password = payload.get("password")
+
+    if not token or not new_password:
+        raise HTTPException(status_code=400, detail="Token en nieuw wachtwoord verplicht")
+
+    conn = get_db_conn()
+    cur = conn.cursor()
+
+    cur.execute(
+        """
+        SELECT id
+        FROM auth_users
+        WHERE reset_token = %s
+          AND reset_expires > NOW()
+        """,
+        (token,)
+    )
+    user = cur.fetchone()
+
+    if not user:
+        raise HTTPException(status_code=400, detail="Ongeldige of verlopen reset-link")
+
+    # 🔑 HIER gaat het NU goed
+    new_hash = pwd_context.hash(new_password)
+
+    cur.execute(
+        """
+        UPDATE auth_users
+        SET password_hash = %s,
+            reset_token = NULL,
+            reset_expires = NULL
+        WHERE id = %s
+        """,
+        (new_hash, user["id"])
+    )
+
+    conn.commit()
+    conn.close()
+
+    return {"success": True}
 
 
 def get_or_create_user(conn, session_id: str) -> int:
