@@ -740,9 +740,9 @@ async def login(payload: dict):
     )
     user = cur.fetchone()
 
-    if not user or not verify_password(safe_password, user["password_hash"]):
-        conn.close()
-        raise HTTPException(status_code=401, detail="Ongeldige inloggegevens")
+   if not user or not verify_password(password, user["password_hash"]):
+    raise HTTPException(status_code=401, detail="Invalid credentials")
+
 
     # nieuwe sessie
     session_id = str(uuid.uuid4())
