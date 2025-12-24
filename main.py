@@ -26,6 +26,13 @@ from chat_engine.utils import get_logical_date
 from fastapi import APIRouter, Request
 from passlib.context import CryptContext
 
+from passlib.context import CryptContext
+
+pwd_context = CryptContext(
+    schemes=["scrypt"],
+    deprecated="auto"
+)
+
 resend.api_key = os.getenv("RESEND_API_KEY")
 
 
