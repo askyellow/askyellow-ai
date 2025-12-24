@@ -899,6 +899,90 @@ async def register(payload: dict):
         "session": session_id,
         "first_name": first_name
     }
+    @app.post("/auth/request-password-reset")
+async def request_password_reset(payload: dict):
+    email = (payload.get("email") or "").lower().strip()
+
+    conn = get_db_conn()
+    cur = conn.cursor()
+
+    cur.execute(
+        "SELECT id FROM auth_users WHERE email = %s",
+        (email,)
+    )
+    user = cur.fetchone()
+
+    if user:
+        token = str(uuid.uuid4())
+        expires = datetime.utcnow() + timedelta(minutes=30)
+
+        cur.execute(
+            """
+            UPDATE auth_users
+            SET reset_token = %s,
+                reset_expires = %s
+            WHERE id = %s
+            """,
+            (token, expires, user["id"])
+        )
+
+        conn.commit()
+
+        reset_link = f"https://askyellow.nl/reset.html?token={token}"
+        print("🔐 PASSWORD RESET LINK:", reset_link)
+        # ⬆️ NU: handmatig mailen
+        # ⬇️ LATER: mailservice koppelen
+
+    conn.close()
+
+    # ⚠️ ALTIJD hetzelfde antwoord (security)
+    return {
+        "message": "Als dit e-mailadres bestaat, ontvang je een reset-link."
+    }
+    @app.post("/auth/reset-password")
+async def reset_password(payload: dict):
+    token = payload.get("token")
+    new_password = payload.get("new_password") or ""
+
+    if not token or len(new_password) < 6:
+        raise HTTPException(status_code=400, detail="Ongeldige reset-aanvraag")
+
+    safe_password = normalize_password(new_password)
+    new_hash = pwd_context.hash(safe_password)
+
+    conn = get_db_conn()
+    cur = conn.cursor()
+
+    cur.execute(
+        """
+        SELECT id FROM auth_users
+        WHERE reset_token = %s
+          AND reset_expires > NOW()
+        """,
+        (token,)
+    )
+    user = cur.fetchone()
+
+    if not user:
+        conn.close()
+        raise HTTPException(status_code=400, detail="Reset-link ongeldig of verlopen")
+
+    cur.execute(
+        """
+        UPDATE auth_users
+        SET password_hash = %s,
+            reset_token = NULL,
+            reset_expires = NULL
+        WHERE id = %s
+        """,
+        (new_hash, user["id"])
+    )
+
+    conn.commit()
+    conn.close()
+
+    return { "success": True }
+
 
 def get_or_create_user(conn, session_id: str) -> int:
     """Zoek user op session_id, maak anders een nieuwe aan."""
