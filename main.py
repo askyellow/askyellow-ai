@@ -281,7 +281,8 @@ def get_conversation_history_for_model(conn, session_id, limit=12):
 
     messages = [{"role": r[0], "content": r[1]} for r in rows]
     return {"messages": messages}
-    @app.post("/chat")
+
+@app.post("/chat")
 async def chat(payload: dict):
     session_id = payload.get("session_id")
     user_input = payload.get("message", "").strip()
