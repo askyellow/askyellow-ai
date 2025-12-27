@@ -1613,28 +1613,14 @@ async def ask_ai(request: Request):
     # 🔥 HISTORY OPHALEN (LAATSTE 30)
     # =============================================================
     conn = get_db_conn()
-    cur = conn.cursor()
-
-    auth_user = get_auth_user_from_session(conn, session_id)
-    owner_id = (
-        get_or_create_user_for_auth(conn, auth_user["id"], session_id)
-        if auth_user
-        else get_or_create_user(conn, session_id)
-    )
-
-    conv_id = get_or_create_conversation(conn, owner_id)
-
     conv_id, history = get_history_for_model(conn, session_id)
-
-
-history = cur.fetchall()
-history = list(reversed(history))
-
+    conn.close()
 
     print("=== HISTORY FROM DB ===")
     for i, msg in enumerate(history):
         print(i, msg["role"], msg["content"][:80])
     print("=======================")
+
 
     # =============================================================
     # 🔥 LLM CALL (MET HISTORY)
