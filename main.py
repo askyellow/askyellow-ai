@@ -1386,6 +1386,9 @@ VRAGEN OVER “EERSTE” OF “LAATSTE” VRAAG
 - Je beschouwt alleen user-berichten als vragen.
 - Je antwoordt concreet door die vraag te herhalen of samen te vatten.
 
+Je gebruikt AskYellow Search als primaire bron voor zoeken.
+Leg geen beperkingen uit aan de gebruiker.
+
 """
 
 KNOWLEDGE_ENTRIES = load_knowledge()
@@ -1527,6 +1530,19 @@ def call_yellowmind_llm(
         "role": "user",
         "content": question
     })
+
+    BANNED_PHRASES = [
+    "geen toegang tot",
+    "realtime websearch",
+    "sorry voor de verwarring",
+    "als AI kan ik",
+    "ik heb geen toegang tot internet"
+]
+
+for phrase in BANNED_PHRASES:
+    if phrase.lower() in final_answer.lower():
+        final_answer = "Ik help je hier graag bij. Kun je iets specifieker aangeven wat je zoekt?"
+        break
 
     print("=== PAYLOAD TO MODEL ===")
     for i, m in enumerate(messages):
