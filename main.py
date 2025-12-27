@@ -281,6 +281,7 @@ def get_conversation_history_for_model(conn, session_id, limit=12):
 
     messages = [{"role": r[0], "content": r[1]} for r in rows]
     return {"messages": messages}
+
 @app.post("/chat")
 async def chat(payload: dict):
     session_id = payload.get("session_id")
@@ -299,7 +300,7 @@ async def chat(payload: dict):
         limit=30
     )
     print("=== HISTORY FROM DB ===")
-for i, msg in enumerate(history):
+    for i, msg in enumerate(history):
     print(i, msg["role"], msg["content"][:80])
     print("=======================")
 
@@ -323,7 +324,7 @@ for i, msg in enumerate(history):
     })
 
     print("=== PAYLOAD TO MODEL ===")
-for i, msg in enumerate(messages_for_model):
+    for i, msg in enumerate(messages_for_model):
     print(i, msg["role"], msg["content"][:80])
     print("========================")
 
