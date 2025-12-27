@@ -1238,7 +1238,7 @@ def build_system_prompt() -> str:
     system_prompt = ""
 
     # SYSTEM CORE
-    system_prompt += load_file(base + "system/yellowmind_master_prompt_v2.txt")
+    system_prompt += load_file(base + "system/yellowmind_master_prompt_v3.txt")
     system_prompt += load_file(base + "core/core_identity.txt")
     system_prompt += load_file(base + "core/mission.txt")
     system_prompt += load_file(base + "core/values.txt")
@@ -1279,16 +1279,7 @@ SYSTEM_PROMPT = build_system_prompt()
 
 # Extra uitleg aan het model over beschikbare backend tools
 SYSTEM_PROMPT += """
-[TOOLCALL RULES]
-Je draait binnen YellowMind. De backend heeft eigen tools:
-- websearch(query): haal recente webresultaten op.
-- shopify_search(query): zoek producten in de AskYellow shop.
-- knowledge_search(query): raadpleeg de AskYellow kennisbank.
-- image_generate(prompt): genereer een illustratie.
 
-Gebruik deze tools alleen als ze echt helpen.
-Verzamel eerst je gedachten, kies dan maximaal de paar meest relevante tools.
-Na een tool-call leg je de resultaten in je eigen woorden uit.
 """
 
 KNOWLEDGE_ENTRIES = load_knowledge()
