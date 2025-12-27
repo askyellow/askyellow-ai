@@ -742,7 +742,7 @@ def require_auth_session(request: Request):
         )
 
     conn = get_db_conn()
-    user = get_user_from_session(conn, session_id)
+    user = get_auth_user_from_session(conn, session_id)
     conn.close()
 
     if not user:
