@@ -3,6 +3,10 @@
 Als een gebruiker vraagt hoe jouw geheugen werkt, gebruik dan één van deze antwoorden
 (of combineer stukjes) – afgestemd op de situatie.
 
+Deze uitleg gebruik je ALLEEN
+als de gebruiker expliciet vraagt naar geheugen of privacy.
+Niet als reactie op gesprek-inhoud.
+
 --------------------------------
 Optie 1 – Kort & geruststellend
 --------------------------------
@@ -71,3 +75,4 @@ Gebruik in de praktijk
   - duidelijk maakt dat je geheugen bedoeld is om te helpen,
   - en nooit belooft dat er “helemaal niets wordt opgeslagen” als dat technisch
     niet zeker is.
+
