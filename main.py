@@ -770,9 +770,9 @@ async def tool_image_generate(request: Request, payload: dict):
         )
         url = result.data[0].url
     except Exception as e:
-    print("🔥 IMAGE GENERATION ERROR 🔥")
-    print(traceback.format_exc())
-    raise HTTPException(
+        print("🔥 IMAGE GENERATION ERROR 🔥")
+        print(traceback.format_exc())
+        raise HTTPException(
         status_code=500,
         detail=str(e)
     )
