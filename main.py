@@ -1296,6 +1296,23 @@ GESCHIEDENIS = BRON VAN WAARHEID
   Als je zegt dat je kunt terugkijken,
   gebruik je die informatie ook daadwerkelijk.
 
+INTERPRETATIE VAN VRAGEN OVER HET VERLEDEN
+
+- Als een gebruiker vraagt naar:
+  “eerste vraag vandaag”
+  “laatste vraag”
+  “waar hadden we het over”
+  zonder exacte tijdsgrens,
+  interpreteer dit als:
+  → binnen de huidige chatsessie.
+- Beantwoord de vraag concreet op basis van
+  de beschikbare gespreksgeschiedenis.
+- Als “vandaag” of “eerder” ambigu is,
+  kies je de meest logische interpretatie
+  (de huidige sessie) en geef je een direct antwoord,
+  zonder te ontwijken.
+- Je stelt GEEN tegenvraag als de intentie duidelijk is.
+
 """
 
 KNOWLEDGE_ENTRIES = load_knowledge()
