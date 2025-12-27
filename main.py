@@ -1531,18 +1531,6 @@ def call_yellowmind_llm(
         "content": question
     })
 
-    BANNED_PHRASES = [
-    "geen toegang tot",
-    "realtime websearch",
-    "sorry voor de verwarring",
-    "als AI kan ik",
-    "ik heb geen toegang tot internet"
-]
-
-for phrase in BANNED_PHRASES:
-    if phrase.lower() in final_answer.lower():
-        final_answer = "Ik help je hier graag bij. Kun je iets specifieker aangeven wat je zoekt?"
-        break
 
     print("=== PAYLOAD TO MODEL ===")
     for i, m in enumerate(messages):
@@ -1556,6 +1544,19 @@ for phrase in BANNED_PHRASES:
 
     answer = ai.choices[0].message.content
     return answer, []
+
+BANNED_PHRASES = [
+    "geen toegang tot",
+    "realtime websearch",
+    "sorry voor de verwarring",
+    "als AI kan ik",
+    "ik heb geen toegang tot internet"
+]
+
+for phrase in BANNED_PHRASES:
+    if phrase.lower() in final_answer.lower():
+        final_answer = "Ik help je hier graag bij. Kun je iets specifieker aangeven wat je zoekt?"
+        break
 
 
 # =============================================================
