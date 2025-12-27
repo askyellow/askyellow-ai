@@ -298,10 +298,10 @@ async def chat(payload: dict):
         session_id,
         limit=30
     )
-print("=== HISTORY FROM DB ===")
+    print("=== HISTORY FROM DB ===")
 for i, msg in enumerate(history):
     print(i, msg["role"], msg["content"][:80])
-print("=======================")
+    print("=======================")
 
     # 2️⃣ Payload voor model bouwen
     messages_for_model = [
@@ -321,6 +321,11 @@ print("=======================")
         "role": "user",
         "content": user_input
     })
+
+    print("=== PAYLOAD TO MODEL ===")
+for i, msg in enumerate(messages_for_model):
+    print(i, msg["role"], msg["content"][:80])
+    print("========================")
 
     # 3️⃣ OpenAI call
     ai_response = client.chat.completions.create(
