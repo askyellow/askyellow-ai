@@ -202,7 +202,35 @@ async def chat_history(session_id: str):
     conn = get_db_conn()
     cur = conn.cursor()
 
+    conv_id, history = get_conversation_history_for_model(
+    conn,
+    session_id,
+    limit=12
+)
     auth_user = get_auth_user_from_session(conn, session_id)
+
+    # 1. history ophalen uit DB
+conv_id, history = get_conversation_history_for_model(
+    conn,
+    session_id,
+    limit=12
+)
+
+# 2. payload bouwen voor het model
+messages_for_model = [
+    {"role": "system", "content": SYSTEM_PROMPT}
+]
+
+for msg in history:
+    messages_for_model.append({
+        "role": msg["role"],
+        "content": msg["content"]
+    })
+
+messages_for_model.append({
+    "role": "user",
+    "content": user_input
+})
 
     if auth_user:
         owner_id = get_or_create_user_for_auth(conn, auth_user["id"], session_id)
@@ -231,6 +259,35 @@ async def chat_history(session_id: str):
         ]
     }
 
+def get_conversation_history_for_model(conn, session_id, limit=12):
+    """
+    Haalt de laatste berichten van een gesprek op
+    voor model-context (oud → nieuw).
+    """
+    cur = conn.cursor()
+
+    auth_user = get_auth_user_from_session(conn, session_id)
+
+    if auth_user:
+        owner_id = get_or_create_user_for_auth(conn, auth_user["id"], session_id)
+    else:
+        owner_id = get_or_create_user(conn, session_id)
+
+    conv_id = get_or_create_conversation(conn, owner_id)
+
+    cur.execute(
+        """
+        SELECT role, content
+        FROM messages
+        WHERE conversation_id = %s
+        ORDER BY created_at ASC
+        LIMIT %s
+        """,
+        (conv_id, limit)
+    )
+
+    rows = cur.fetchall()
+    return conv_id, rows
 
 
     owner_id = get_or_create_user_for_auth(conn, auth_user["id"], session_id)
@@ -714,6 +771,30 @@ def init_db():
 
     conn.commit()
     conn.close()
+
+def get_recent_messages(conversation_id, limit=12):
+    """
+    Haal de laatste berichten van een gesprek op
+    (oud → nieuw), voor model-context.
+    """
+    conn = get_db_conn()
+    cur = conn.cursor()
+
+    cur.execute(
+        """
+        SELECT role, content
+        FROM messages
+        WHERE conversation_id = %s
+        ORDER BY created_at ASC
+        LIMIT %s
+        """,
+        (conversation_id, limit)
+    )
+
+    rows = cur.fetchall()
+    conn.close()
+    return rows
+
 
 @app.on_event("startup")
 def on_startup():
