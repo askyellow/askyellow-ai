@@ -298,6 +298,10 @@ async def chat(payload: dict):
         session_id,
         limit=30
     )
+print("=== HISTORY FROM DB ===")
+for i, msg in enumerate(history):
+    print(i, msg["role"], msg["content"][:80])
+print("=======================")
 
     # 2️⃣ Payload voor model bouwen
     messages_for_model = [
@@ -1312,6 +1316,15 @@ INTERPRETATIE VAN VRAGEN OVER HET VERLEDEN
   (de huidige sessie) en geef je een direct antwoord,
   zonder te ontwijken.
 - Je stelt GEEN tegenvraag als de intentie duidelijk is.
+
+VRAGEN OVER “EERSTE” OF “LAATSTE” VRAAG
+
+- Als een gebruiker vraagt naar:
+  “de eerste vraag” of “de laatste vraag”:
+  → bepaal dit door in de gespreksgeschiedenis te kijken
+    naar het eerste of laatste bericht met role = user.
+- Je beschouwt alleen user-berichten als vragen.
+- Je antwoordt concreet door die vraag te herhalen of samen te vatten.
 
 """
 
