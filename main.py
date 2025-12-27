@@ -14,6 +14,7 @@ import secrets
 import resend
 from datetime import datetime, timedelta
 import uuid
+import traceback
 
 # DB
 import psycopg2
@@ -769,7 +770,12 @@ async def tool_image_generate(request: Request, payload: dict):
         )
         url = result.data[0].url
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Image generation error: {e}")
+    print("🔥 IMAGE GENERATION ERROR 🔥")
+    print(traceback.format_exc())
+    raise HTTPException(
+        status_code=500,
+        detail=str(e)
+    )
 
     return {
         "tool": "image_generate",
