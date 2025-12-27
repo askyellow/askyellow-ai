@@ -288,7 +288,10 @@ async def chat(payload: dict):
     user_input = payload.get("message", "").strip()
 
     if not session_id or not user_input:
-        raise HTTPException(status_code=400, detail="session_id of message ontbreekt")
+        raise HTTPException(
+            status_code=400,
+            detail="session_id of message ontbreekt"
+        )
 
     conn = get_db_conn()
     cur = conn.cursor()
@@ -299,9 +302,10 @@ async def chat(payload: dict):
         session_id,
         limit=30
     )
+
     print("=== HISTORY FROM DB ===")
     for i, msg in enumerate(history):
-    print(i, msg["role"], msg["content"][:80])
+        print(i, msg["role"], msg["content"][:80])
     print("=======================")
 
     # 2️⃣ Payload voor model bouwen
@@ -325,7 +329,7 @@ async def chat(payload: dict):
 
     print("=== PAYLOAD TO MODEL ===")
     for i, msg in enumerate(messages_for_model):
-    print(i, msg["role"], msg["content"][:80])
+        print(i, msg["role"], msg["content"][:80])
     print("========================")
 
     # 3️⃣ OpenAI call
@@ -361,6 +365,7 @@ async def chat(payload: dict):
     return {
         "reply": assistant_reply
     }
+
 
 
 @app.get("/health")
