@@ -1452,71 +1452,45 @@ def wants_image(q: str) -> bool:
 # 6. OPENAI CALL — FIXED FOR o3 RESPONSE FORMAT (SAFE)
 # =============================================================
 
-def call_yellowmind_llm(question, language, kb_answer, sql_match, hints):
-    messages = []
-
-    messages.append({"role": "system", "content": SYSTEM_PROMPT})
-
-    knowledge_blocks = []
-
-    if kb_answer:
-        knowledge_blocks.append("STATIC_KB:\n" + kb_answer)
-
-    if sql_match:
-        knowledge_blocks.append(
-            "SQL_KB:\n"
-            f"Vraag: {sql_match['question']}\n"
-            f"Antwoord: {sql_match['answer']}\n"
-            f"Score: {sql_match['score']}"
-        )
-
-    if knowledge_blocks:
-        messages.append({
+def call_yellowmind_llm(
+    question,
+    language,
+    kb_answer,
+    sql_match,
+    hints,
+    history=None
+):
+    messages = [
+        {
             "role": "system",
-            "content": "[ASKYELLOW_KNOWLEDGE]\n" + "\n\n".join(knowledge_blocks)
-        })
+            "content": SYSTEM_PROMPT
+        }
+    ]
 
-    if hints:
-        hint_text = "\n".join(
-            [f"- {k}: {v}" for k, v in hints.items() if v]
-        )
-        messages.append({
-            "role": "system",
-            "content": "[BACKEND_HINTS]\n" + hint_text
-        })
+    if history:
+        for msg in history:
+            messages.append({
+                "role": msg["role"],
+                "content": msg["content"]
+            })
 
-    messages.append({"role": "user", "content": question})
+    messages.append({
+        "role": "user",
+        "content": question
+    })
 
-    selected_model = YELLOWMIND_MODEL
-    print(f"🤖 Model geselecteerd: {selected_model}")
+    print("=== PAYLOAD TO MODEL ===")
+    for i, m in enumerate(messages):
+        print(i, m["role"], m["content"][:80])
+    print("========================")
 
-    llm_response = client.responses.create(
-        model=selected_model,
-        input=messages
+    ai = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=messages
     )
 
-    answer_text = None
-
-    try:
-        for block in llm_response.output:
-            if getattr(block, "type", None) == "message" and getattr(block, "role", None) == "assistant":
-                answer_text = block.content[0].text
-                break
-
-        if not answer_text:
-            for block in llm_response.output:
-                if hasattr(block, "content") and block.content:
-                    answer_text = block.content[0].text
-                    break
-
-        if not answer_text:
-            answer_text = "⚠️ Geen leesbare assistant-output ontvangen."
-
-    except Exception as e:
-        print("❌ EXTRACT ERROR SAFE:", e)
-        answer_text = "⚠️ Ik kon het modelantwoord niet verwerken."
-
-    return answer_text, llm_response.output
+    answer = ai.choices[0].message.content
+    return answer, []
 
 
 # =============================================================
@@ -1562,9 +1536,6 @@ async def ask_ai(request: Request):
     if not session_id:
         session_id = "anon-" + secrets.token_hex(8)
 
-    # -----------------------------
-    # Safety: geen vraag
-    # -----------------------------
     if not question:
         return JSONResponse(
             status_code=400,
@@ -1572,7 +1543,7 @@ async def ask_ai(request: Request):
         )
 
     # -----------------------------
-    # IMAGE ROUTE (VOOR LLM)
+    # IMAGE ROUTE
     # -----------------------------
     if wants_image(question):
         try:
@@ -1593,15 +1564,8 @@ async def ask_ai(request: Request):
             }
 
     # -----------------------------
-    # INIT
+    # CONTEXT & KNOWLEDGE
     # -----------------------------
-    final_answer = None
-    raw_output = []
-    kb_answer = None
-    sql_match = None
-    hints = {}
-
-    # CONTEXT
     identity_answer = try_identity_origin_answer(question, language)
     sql_match = search_sql_knowledge(question)
 
@@ -1610,36 +1574,69 @@ async def ask_ai(request: Request):
     except Exception:
         kb_answer = None
 
-    # LLM
-    start_ai = time.time()
-    final_answer, raw_output = call_yellowmind_llm(
-        question, language, kb_answer, sql_match, hints
+    hints = {}
+
+    # =============================================================
+    # 🔥 HISTORY OPHALEN (LAATSTE 30)
+    # =============================================================
+    conn = get_db_conn()
+    cur = conn.cursor()
+
+    auth_user = get_auth_user_from_session(conn, session_id)
+    owner_id = (
+        get_or_create_user_for_auth(conn, auth_user["id"], session_id)
+        if auth_user
+        else get_or_create_user(conn, session_id)
     )
+
+    conv_id = get_or_create_conversation(conn, owner_id)
+
+    cur.execute(
+        """
+        SELECT role, content
+        FROM messages
+        WHERE conversation_id = %s
+        ORDER BY created_at ASC
+        LIMIT 30
+        """,
+        (conv_id,)
+    )
+    history = cur.fetchall()
+    conn.close()
+
+    print("=== HISTORY FROM DB ===")
+    for i, msg in enumerate(history):
+        print(i, msg["role"], msg["content"][:80])
+    print("=======================")
+
+    # =============================================================
+    # 🔥 LLM CALL (MET HISTORY)
+    # =============================================================
+    start_ai = time.time()
+
+    final_answer, raw_output = call_yellowmind_llm(
+        question=question,
+        language=language,
+        kb_answer=kb_answer,
+        sql_match=sql_match,
+        hints=hints,
+        history=history
+    )
+
     ai_ms = int((time.time() - start_ai) * 1000)
 
     if not final_answer:
         final_answer = "⚠️ Geen geldig antwoord beschikbaar."
 
-    # -----------------------------
-    # SAVE CHAT HISTORY
-    # -----------------------------
+    # =============================================================
+    # OPSLAAN
+    # =============================================================
     try:
         conn = get_db_conn()
-
-        auth_user = get_auth_user_from_session(conn, session_id)
-        owner_id = (
-            get_or_create_user_for_auth(conn, auth_user["id"], session_id)
-            if auth_user
-            else get_or_create_user(conn, session_id)
-        )
-
-        conv_id = get_or_create_conversation(conn, owner_id)
         save_message(conn, conv_id, "user", question)
         save_message(conn, conv_id, "assistant", final_answer)
-
         conn.commit()
         conn.close()
-
     except Exception as e:
         print("⚠️ Chat history save failed:", e)
 
@@ -1651,5 +1648,4 @@ async def ask_ai(request: Request):
         "output": raw_output,
         "source": "yellowmind_llm"
     }
-
 
