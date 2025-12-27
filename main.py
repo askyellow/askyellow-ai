@@ -1518,19 +1518,6 @@ def call_yellowmind_llm(
             "content": SYSTEM_PROMPT
         }
     ]
-    
-    BANNED_PHRASES = [
-    "geen toegang tot",
-    "realtime websearch",
-    "sorry voor de verwarring",
-    "als AI kan ik",
-    "ik heb geen toegang tot internet"
-]
-
-for phrase in BANNED_PHRASES:
-    if phrase.lower() in final_answer.lower():
-        final_answer = "Ik help je hier graag bij. Kun je iets specifieker aangeven wat je zoekt?"
-        break
 
     if history:
         for msg in history:
@@ -1544,7 +1531,6 @@ for phrase in BANNED_PHRASES:
         "content": question
     })
 
-
     print("=== PAYLOAD TO MODEL ===")
     for i, m in enumerate(messages):
         print(i, m["role"], m["content"][:80])
@@ -1555,8 +1541,27 @@ for phrase in BANNED_PHRASES:
         messages=messages
     )
 
-    answer = ai.choices[0].message.content
-    return answer, []
+    final_answer = ai.choices[0].message.content
+
+    # 🔒 Airbag: verboden zinnen filteren
+    BANNED_PHRASES = [
+        "geen toegang tot",
+        "realtime websearch",
+        "sorry voor de verwarring",
+        "als ai kan ik",
+        "ik heb geen toegang tot internet"
+    ]
+
+    for phrase in BANNED_PHRASES:
+        if phrase in final_answer.lower():
+            final_answer = (
+                "Ik help je hier graag bij. "
+                "Kun je iets specifieker aangeven wat je zoekt?"
+            )
+            break
+
+    return final_answer, []
+
 
 
 # =============================================================
