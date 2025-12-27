@@ -191,6 +191,42 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# =============================================================
+# CHAT HISTORY – VOOR MODEL CONTEXT (BLOK 1) NIEUW!!!
+# =============================================================
+
+def get_history_for_model(conn, session_id, limit=30):
+    """
+    Haalt de LAATSTE berichten van een gesprek op,
+    bedoeld voor LLM-context (oud → nieuw).
+    """
+    cur = conn.cursor()
+
+    auth_user = get_auth_user_from_session(conn, session_id)
+    owner_id = (
+        get_or_create_user_for_auth(conn, auth_user["id"], session_id)
+        if auth_user
+        else get_or_create_user(conn, session_id)
+    )
+
+    conv_id = get_or_create_conversation(conn, owner_id)
+
+    cur.execute(
+        """
+        SELECT role, content
+        FROM messages
+        WHERE conversation_id = %s
+        ORDER BY created_at DESC
+        LIMIT %s
+        """,
+        (conv_id, limit)
+    )
+
+    rows = cur.fetchall()
+    rows.reverse()  # 🔥 cruciaal: oud → nieuw voor het model
+
+    return conv_id, rows
+
 
 @app.get("/chat")
 def serve_chat_page():
@@ -232,18 +268,14 @@ async def chat_history(session_id: str):
     }
 
 def get_conversation_history_for_model(conn, session_id, limit=12):
-    """
-    Haalt de laatste berichten van een gesprek op
-    voor model-context (oud → nieuw).
-    """
     cur = conn.cursor()
 
     auth_user = get_auth_user_from_session(conn, session_id)
-
-    if auth_user:
-        owner_id = get_or_create_user_for_auth(conn, auth_user["id"], session_id)
-    else:
-        owner_id = get_or_create_user(conn, session_id)
+    owner_id = (
+        get_or_create_user_for_auth(conn, auth_user["id"], session_id)
+        if auth_user
+        else get_or_create_user(conn, session_id)
+    )
 
     conv_id = get_or_create_conversation(conn, owner_id)
 
@@ -258,8 +290,9 @@ def get_conversation_history_for_model(conn, session_id, limit=12):
         (conv_id, limit)
     )
 
-    rows = cur.fetchall()
+    rows = list(reversed(cur.fetchall()))
     return conv_id, rows
+
 
 
     owner_id = get_or_create_user_for_auth(conn, auth_user["id"], session_id)
