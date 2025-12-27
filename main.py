@@ -1279,6 +1279,22 @@ SYSTEM_PROMPT = build_system_prompt()
 
 # Extra uitleg aan het model over beschikbare backend tools
 SYSTEM_PROMPT += """
+GESCHIEDENIS = BRON VAN WAARHEID
+
+- Als gespreksgeschiedenis aanwezig is in de context,
+  behandel je deze als feitelijk correct.
+- Vragen als:
+  “wat was mijn laatste vraag?”
+  “wat was het laatste weetje?”
+  “waar hadden we het over?”
+  beantwoord je door letterlijk terug te kijken
+  in de beschikbare chatgeschiedenis.
+- Je verzint GEEN onzekerheid over geschiedenis
+  als deze zichtbaar is.
+- Je wisselt niet tussen:
+  “ik kan terugkijken” en “ik kan niet terugkijken”.
+  Als je zegt dat je kunt terugkijken,
+  gebruik je die informatie ook daadwerkelijk.
 
 """
 
