@@ -336,10 +336,10 @@ async def chat(payload: dict):
         limit=30
     )
 
-    print("=== HISTORY FROM DB ===")
-    for i, msg in enumerate(history):
-        print(i, msg["role"], msg["content"][:80])
-    print("=======================")
+    #print("=== HISTORY FROM DB ===")
+    #for i, msg in enumerate(history):
+    #    print(i, msg["role"], msg["content"][:80])
+    #print("=======================")
 
     # 2️⃣ Payload voor model bouwen
     messages_for_model = [
@@ -1616,10 +1616,10 @@ async def ask_ai(request: Request):
     conv_id, history = get_history_for_model(conn, session_id)
     conn.close()
 
-    print("=== HISTORY FROM DB ===")
-    for i, msg in enumerate(history):
-        print(i, msg["role"], msg["content"][:80])
-    print("=======================")
+    # print("=== HISTORY FROM DB ===")
+    # for i, msg in enumerate(history):
+    #    print(i, msg["role"], msg["content"][:80])
+    # print("=======================")
 
 
     # =============================================================
