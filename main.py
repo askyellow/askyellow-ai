@@ -202,35 +202,7 @@ async def chat_history(session_id: str):
     conn = get_db_conn()
     cur = conn.cursor()
 
-    conv_id, history = get_conversation_history_for_model(
-    conn,
-    session_id,
-    limit=12
-)
     auth_user = get_auth_user_from_session(conn, session_id)
-
-    # 1. history ophalen uit DB
-conv_id, history = get_conversation_history_for_model(
-    conn,
-    session_id,
-    limit=12
-)
-
-# 2. payload bouwen voor het model
-messages_for_model = [
-    {"role": "system", "content": SYSTEM_PROMPT}
-]
-
-for msg in history:
-    messages_for_model.append({
-        "role": msg["role"],
-        "content": msg["content"]
-    })
-
-messages_for_model.append({
-    "role": "user",
-    "content": user_input
-})
 
     if auth_user:
         owner_id = get_or_create_user_for_auth(conn, auth_user["id"], session_id)
@@ -309,6 +281,77 @@ def get_conversation_history_for_model(conn, session_id, limit=12):
 
     messages = [{"role": r[0], "content": r[1]} for r in rows]
     return {"messages": messages}
+    @app.post("/chat")
+async def chat(payload: dict):
+    session_id = payload.get("session_id")
+    user_input = payload.get("message", "").strip()
+
+    if not session_id or not user_input:
+        raise HTTPException(status_code=400, detail="session_id of message ontbreekt")
+
+    conn = get_db_conn()
+    cur = conn.cursor()
+
+    # 1️⃣ History ophalen (Memory v1)
+    conv_id, history = get_conversation_history_for_model(
+        conn,
+        session_id,
+        limit=12
+    )
+
+    # 2️⃣ Payload voor model bouwen
+    messages_for_model = [
+        {
+            "role": "system",
+            "content": SYSTEM_PROMPT
+        }
+    ]
+
+    for msg in history:
+        messages_for_model.append({
+            "role": msg["role"],
+            "content": msg["content"]
+        })
+
+    messages_for_model.append({
+        "role": "user",
+        "content": user_input
+    })
+
+    # 3️⃣ OpenAI call
+    ai_response = client.chat.completions.create(
+        model="gpt-4.1-mini",
+        messages=messages_for_model
+    )
+
+    assistant_reply = ai_response.choices[0].message.content
+
+    # 4️⃣ Opslaan: user message
+    cur.execute(
+        """
+        INSERT INTO messages (conversation_id, role, content)
+        VALUES (%s, %s, %s)
+        """,
+        (conv_id, "user", user_input)
+    )
+
+    # 5️⃣ Opslaan: assistant reply
+    cur.execute(
+        """
+        INSERT INTO messages (conversation_id, role, content)
+        VALUES (%s, %s, %s)
+        """,
+        (conv_id, "assistant", assistant_reply)
+    )
+
+    conn.commit()
+    conn.close()
+
+    # 6️⃣ Terug naar frontend
+    return {
+        "reply": assistant_reply
+    }
+
 
 @app.get("/health")
 def health():
