@@ -1624,16 +1624,8 @@ async def ask_ai(request: Request):
 
     conv_id = get_or_create_conversation(conn, owner_id)
 
-    cur.execute(
-    """
-    SELECT role, content
-    FROM messages
-    WHERE conversation_id = %s
-    ORDER BY created_at DESC
-    LIMIT 30
-    """,
-    (conv_id,)
-)
+    conv_id, history = get_history_for_model(conn, session_id)
+
 
 history = cur.fetchall()
 history = list(reversed(history))
