@@ -1656,6 +1656,35 @@ async def ask_ai(request: Request):
 
     hints = {}
 
+    final_answer, raw_output = call_yellowmind_llm(...)
+
+        # =============================================================
+    # 🔍 SEARCH INTENT DETECTION (AskYellow-first)
+    # =============================================================
+    SEARCH_TRIGGERS = [
+        "opzoeken",
+        "op zoek",
+        "meest verkocht",
+        "dit jaar",
+        "dit moment",
+        "actueel",
+        "nu populair",
+        "trending",
+        "beste",
+        "vergelijk",
+        "waar koop",
+        "waar kan ik",
+    ]
+
+    q_lower = question.lower()
+
+    if any(trigger in q_lower for trigger in SEARCH_TRIGGERS):
+        return {
+            "type": "search",
+            "query": question
+        }
+
+
     # =============================================================
     # 🔥 HISTORY OPHALEN (LAATSTE 30)
     # =============================================================
