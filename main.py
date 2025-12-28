@@ -1656,9 +1656,7 @@ async def ask_ai(request: Request):
 
     hints = {}
 
-    final_answer, raw_output = call_yellowmind_llm(...)
-
-        # =============================================================
+    # =============================================================
     # 🔍 SEARCH INTENT DETECTION (AskYellow-first)
     # =============================================================
     SEARCH_TRIGGERS = [
