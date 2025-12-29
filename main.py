@@ -381,7 +381,6 @@ if not answer:
     answer = "⚠️ Ik kreeg geen inhoudelijk antwoord terug, maar de chat werkt wel 🙂"
 
 return answer, response
-    assistant_reply = ai_response.choices[0].message.content
 
     # 4️⃣ Opslaan: user message
     cur.execute(
