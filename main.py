@@ -1703,7 +1703,10 @@ async def ask(request: Request):
         kb_answer=None,
         sql_match=None,
         hints={},
-        history=[]
+        conn = get_db_conn()
+        _, history = get_history_for_model(conn, session_id)
+        conn.close()
+
     )
 
     if not final_answer:
