@@ -1616,18 +1616,13 @@ async def ask(request: Request):
     session_id = payload.get("session_id")
     language = payload.get("language", "nl")
 
-    # -----------------------------
-    # AUTH
-    # -----------------------------
     conn = get_db_conn()
     user = get_auth_user_from_session(conn, session_id)
     conn.close()
 
     intent = detect_intent(question)
 
-    # -----------------------------
-    # IMAGE → DIRECT RETURN
-    # -----------------------------
+    # 🖼 IMAGE
     if intent == "image":
         if not user:
             return {
@@ -1640,10 +1635,36 @@ async def ask(request: Request):
                 )
             }
 
+        return {
+            "type": "image",
+            "url": generate_image(question)
+        }
+
+    # 🔍 SEARCH
+    if intent == "search":
+        return {
+            "type": "search",
+            "query": question
+        }
+
+    # 💬 TEXT
+    final_answer, raw_output = call_yellowmind_llm(
+        question=question,
+        language=language,
+        kb_answer=None,
+        sql_match=None,
+        hints={},
+        history=[]
+    )
+
+    if not final_answer:
+        final_answer = "⚠️ Ik kreeg geen inhoudelijk antwoord terug, maar de chat werkt wel 🙂"
+
     return {
-        "type": "image",
-        "url": generate_image(question)
+        "type": "text",
+        "answer": final_answer
     }
+
 
 
     # -----------------------------
