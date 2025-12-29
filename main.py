@@ -1600,6 +1600,16 @@ def detect_cold_start(sql_ms, kb_ms, ai_ms, total_ms):
         return "⏱️ Slow total"
     return "✓ warm"
 
+    # -----------------------------
+    # IMAGE ROUTE
+    # -----------------------------
+    def generate_image(prompt: str) -> str:
+        img = client.images.generate(
+        model="gpt-image-1",
+        prompt=prompt,
+        size="1024x1024",
+        )
+        return img.data[0].url
 
 # =============================================================
 # MAIN ASK ENDPOINT
@@ -1648,17 +1658,7 @@ async def ask(request: Request):
     }
 
 
-        # -----------------------------
-        # IMAGE ROUTE
-        # -----------------------------
-    def generate_image(prompt: str) -> str:
-        img = client.images.generate(
-        model="gpt-image-1",
-        prompt=prompt,
-        size="1024x1024",
-        )
-        return img.data[0].url
-
+       
 
         # -----------------------------
         # CONTEXT & KNOWLEDGE
