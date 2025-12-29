@@ -1641,7 +1641,7 @@ def ask(payload: AskRequest):
         # -----------------------------
         # IMAGE ROUTE
         # -----------------------------
-        def generate_image(prompt: str) -> str:
+    def generate_image(prompt: str) -> str:
     img = client.images.generate(
         model="gpt-image-1",
         prompt=prompt,
