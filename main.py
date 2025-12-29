@@ -1629,16 +1629,22 @@ async def ask(request: Request):
     # IMAGE → DIRECT RETURN
     # -----------------------------
     if intent == "image":
-        if not user:
-            return {
-                "type": "error",
-                "code": "login_required_for_image"
-            }
-
+    if not user:
         return {
-            "type": "image",
-            "url": generate_image(question)
+            "type": "error",
+            "code": "login_required_for_image",
+            "answer": (
+                "🖼️ Ik kan afbeeldingen genereren, "
+                "maar dat is alleen beschikbaar voor ingelogde gebruikers.\n\n"
+                "👉 Log in of maak een account aan om dit te gebruiken."
+            )
         }
+
+    return {
+        "type": "image",
+        "url": generate_image(question)
+    }
+
 
     # -----------------------------
     # SEARCH → DIRECT RETURN
@@ -1680,7 +1686,16 @@ async def ask(request: Request):
         hints=hints,
         history=history
     )
-
+    # 🟡 STAP 2 — FALLBACK GARANTIE
+    if not final_answer:
+        final_answer = (
+            "⚠️ Ik kreeg geen inhoudelijk antwoord terug, "
+            "maar de chat werkt wel 🙂"
+        )
+    return {
+        "type": "text",
+        "answer": final_answer
+}
     ai_ms = int((time.time() - start_ai) * 1000)
 
     if not final_answer:
