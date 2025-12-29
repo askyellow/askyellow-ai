@@ -1614,7 +1614,7 @@ async def ask(request: Request):
     session_id = payload.get("session_id")
     language = payload.get("language", "nl")
 
-    user = get_user_from_session(session_id)
+    user = get_auth_user_from_session(session_id)
     intent = detect_intent(question)
 
     # 🖼 IMAGE
