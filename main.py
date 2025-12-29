@@ -334,17 +334,12 @@ async def chat(payload: dict):
     conn = get_db_conn()
     cur = conn.cursor()
 
-    # 1️⃣ History ophalen (Memory v1)
+    # 1️⃣ History ophalen
     conv_id, history = get_conversation_history_for_model(
         conn,
         session_id,
         limit=30
     )
-
-    #print("=== HISTORY FROM DB ===")
-    #for i, msg in enumerate(history):
-    #    print(i, msg["role"], msg["content"][:80])
-    #print("=======================")
 
     # 2️⃣ Payload voor model bouwen
     messages_for_model = [
@@ -365,22 +360,16 @@ async def chat(payload: dict):
         "content": user_input
     })
 
-    print("=== PAYLOAD TO MODEL ===")
-    for i, msg in enumerate(messages_for_model):
-        print(i, msg["role"], msg["content"][:80])
-    print("========================")
-
     # 3️⃣ OpenAI call
     ai_response = client.chat.completions.create(
         model="gpt-4.1-mini",
         messages=messages_for_model
     )
-answer = extract_text_from_response(response)
 
-if not answer:
-    answer = "⚠️ Ik kreeg geen inhoudelijk antwoord terug, maar de chat werkt wel 🙂"
+    answer = extract_text_from_response(ai_response)
 
-return answer, response
+    if not answer:
+        answer = "⚠️ Ik kreeg geen inhoudelijk antwoord terug, maar de chat werkt wel 🙂"
 
     # 4️⃣ Opslaan: user message
     cur.execute(
@@ -397,7 +386,7 @@ return answer, response
         INSERT INTO messages (conversation_id, role, content)
         VALUES (%s, %s, %s)
         """,
-        (conv_id, "assistant", assistant_reply)
+        (conv_id, "assistant", answer)
     )
 
     conn.commit()
@@ -405,8 +394,9 @@ return answer, response
 
     # 6️⃣ Terug naar frontend
     return {
-        "reply": assistant_reply
+        "reply": answer
     }
+
 
 
 
