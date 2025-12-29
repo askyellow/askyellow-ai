@@ -1646,8 +1646,8 @@ def ask(payload: AskRequest):
         model="gpt-image-1",
         prompt=prompt,
         size="1024x1024",
-    )
-    return img.data[0].url
+        )
+        return img.data[0].url
 
 
         # -----------------------------
@@ -1735,11 +1735,4 @@ def ask(payload: AskRequest):
             "source": "yellowmind_llm"
         }
 
-    except Exception as e:
-        print("🔥 ASK ENDPOINT CRASH 🔥")
-        traceback.print_exc()
-        return JSONResponse(
-            status_code=500,
-            content={"error": "Internal server error"}
-        )
 
