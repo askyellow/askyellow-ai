@@ -1647,47 +1647,56 @@ async def ask(request: Request):
     session_id = payload.get("session_id")
     language = payload.get("language", "nl")
 
+    # -----------------------------
+    # AUTH
+    # -----------------------------
     conn = get_db_conn()
     user = get_auth_user_from_session(conn, session_id)
     conn.close()
 
     intent = detect_intent(question)
 
+    # =============================================================
     # 🖼 IMAGE
+    # =============================================================
     if intent == "image":
         if not user:
-        answer = "🖼️ Log in om afbeeldingen te genereren."
-        store_message_pair(session_id, question, answer)
+            answer = "🖼️ Log in om afbeeldingen te genereren."
+            store_message_pair(session_id, question, answer)
+            return {
+                "type": "error",
+                "answer": answer
+            }
+
+        image_url = generate_image(question)
+
+        if not image_url:
+            answer = "⚠️ Afbeelding genereren mislukt. Probeer het opnieuw."
+            store_message_pair(session_id, question, answer)
+            return {
+                "type": "error",
+                "answer": answer
+            }
+
+        store_message_pair(session_id, question, f"[IMAGE]{image_url}")
         return {
-            "type": "error",
-            "answer": answer
+            "type": "image",
+            "url": image_url
         }
 
-    image_url = generate_image(question)
-
-    if not image_url:
-        answer = "⚠️ Afbeelding genereren mislukt."
-        store_message_pair(session_id, question, answer)
-        return {
-            "type": "error",
-            "answer": answer
-        }
-
-    store_message_pair(session_id, question, f"[IMAGE]{image_url}")
-    return {
-        "type": "image",
-        "url": image_url
-    }
-
-
+    # =============================================================
     # 🔍 SEARCH
+    # =============================================================
     if intent == "search":
+        store_message_pair(session_id, question, f"[SEARCH]{question}")
         return {
             "type": "search",
             "query": question
         }
 
+    # =============================================================
     # 💬 TEXT
+    # =============================================================
     final_answer, raw_output = call_yellowmind_llm(
         question=question,
         language=language,
@@ -1700,87 +1709,10 @@ async def ask(request: Request):
     if not final_answer:
         final_answer = "⚠️ Ik kreeg geen inhoudelijk antwoord terug, maar de chat werkt wel 🙂"
 
+    store_message_pair(session_id, question, final_answer)
+
     return {
         "type": "text",
         "answer": final_answer
     }
-
-
-
-
-    # -----------------------------
-    # SEARCH → DIRECT RETURN
-    # -----------------------------
-    if intent == "search":
-        return {
-            "type": "search",
-            "query": question
-        }
-
-    # =============================================================
-    # 💬 TEXT FLOW (OUDE LOGICA – MAG DOORLOPEN)
-    # =============================================================
-
-    # CONTEXT & KNOWLEDGE
-    identity_answer = try_identity_origin_answer(question, language)
-    sql_match = search_sql_knowledge(question)
-
-    try:
-        kb_answer = match_question(question, KNOWLEDGE_ENTRIES)
-    except Exception:
-        kb_answer = None
-
-    hints = {}
-
-    # HISTORY
-    conn = get_db_conn()
-    conv_id, history = get_history_for_model(conn, session_id)
-    conn.close()
-
-    # LLM CALL
-    start_ai = time.time()
-
-    final_answer, raw_output = call_yellowmind_llm(
-        question=question,
-        language=language,
-        kb_answer=kb_answer,
-        sql_match=sql_match,
-        hints=hints,
-        history=history
-    )
-    # 🟡 STAP 2 — FALLBACK GARANTIE
-    if not final_answer:
-        final_answer = (
-            "⚠️ Ik kreeg geen inhoudelijk antwoord terug, "
-            "maar de chat werkt wel 🙂"
-        )
-    return {
-        "type": "text",
-        "answer": final_answer
-}
-    ai_ms = int((time.time() - start_ai) * 1000)
-
-    if not final_answer:
-        final_answer = "⚠️ Geen geldig antwoord beschikbaar."
-
-    # OPSLAAN
-    try:
-        conn = get_db_conn()
-        save_message(conn, conv_id, "user", question)
-        save_message(conn, conv_id, "assistant", final_answer)
-        conn.commit()
-        conn.close()
-    except Exception as e:
-        print("⚠️ Chat history save failed:", e)
-
-    status = detect_cold_start(0, 0, ai_ms, ai_ms)
-    print(f"[STATUS] {status} | AI {ai_ms} ms")
-
-    return {
-        "type": "text",
-        "answer": final_answer,
-        "output": raw_output,
-        "source": "yellowmind_llm"
-    }
-
 
