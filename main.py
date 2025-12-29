@@ -1598,12 +1598,29 @@ def detect_cold_start(sql_ms, kb_ms, ai_ms, total_ms):
 # IMAGE ROUTE
 # -----------------------------
 def generate_image(prompt: str) -> str:
-    img = client.images.generate(
-    model="gpt-image-1",
-    prompt=prompt,
-    size="1024x1024",
+    result = client.images.generate(
+        model="gpt-image-1",
+        prompt=prompt,
+        size="1024x1024"
     )
-    return img.data[0].url
+
+    # 🔎 Log volledige response (tijdelijk)
+    print("IMAGE RESPONSE:", result)
+
+    # ✅ Veilig ophalen
+    if result.data and len(result.data) > 0:
+        image = result.data[0]
+
+        # Sommige SDK's gebruiken .url, andere .b64_json
+        if hasattr(image, "url") and image.url:
+            return image.url
+
+        if hasattr(image, "b64_json") and image.b64_json:
+            return f"data:image/png;base64,{image.b64_json}"
+
+    # ❌ Fallback
+    return None
+
 
 # =============================================================
 # MAIN ASK ENDPOINT
