@@ -375,7 +375,12 @@ async def chat(payload: dict):
         model="gpt-4.1-mini",
         messages=messages_for_model
     )
+answer = extract_text_from_response(response)
 
+if not answer:
+    answer = "⚠️ Ik kreeg geen inhoudelijk antwoord terug, maar de chat werkt wel 🙂"
+
+return answer, response
     assistant_reply = ai_response.choices[0].message.content
 
     # 4️⃣ Opslaan: user message
