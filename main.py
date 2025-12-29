@@ -132,6 +132,25 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 from yellowmind.knowledge_engine import load_knowledge, match_question
 from yellowmind.identity_origin import try_identity_origin_answer
 
+# =============================================================
+# 2. FASTAPI APP & CORS
+# =============================================================
+
+app = FastAPI(title="YellowMind API")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "https://www.askyellow.nl",
+        "https://askyellow.nl",
+        "http://localhost:5500",
+        "http://127.0.0.1:5500",
+        "http://localhost:3000"
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # =============================================================
 # 1. ENVIRONMENT & OPENAI CLIENT
@@ -175,25 +194,6 @@ SQL_SEARCH_URL = os.getenv(
     "https://www.askyellow.nl/search_knowledge.php"
 )
 
-# =============================================================
-# 2. FASTAPI APP & CORS
-# =============================================================
-
-app = FastAPI(title="YellowMind API")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "https://www.askyellow.nl",
-        "https://askyellow.nl",
-        "http://localhost:5500",
-        "http://127.0.0.1:5500",
-        "http://localhost:3000"
-    ],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 
 # =============================================================
@@ -1605,12 +1605,17 @@ def detect_cold_start(sql_ms, kb_ms, ai_ms, total_ms):
 # MAIN ASK ENDPOINT
 # =============================================================
 
-@app.post("/ask")
-def ask(payload: Request):
-    session_id = payload.session_id
-    user = get_user_from_session(session_id)
 
-    intent = detect_intent(payload.question)
+@app.post("/ask")
+async def ask(request: Request):
+    payload = await request.json()
+
+    question = payload.get("question")
+    session_id = payload.get("session_id")
+    language = payload.get("language", "nl")
+
+    user = get_user_from_session(session_id)
+    intent = detect_intent(question)
 
     # 🖼 IMAGE
     if intent == "image":
@@ -1620,27 +1625,26 @@ def ask(payload: Request):
                 "code": "login_required_for_image"
             }
 
-        image_url = generate_image(payload.question)
-
         return {
             "type": "image",
-            "url": image_url
+            "url": generate_image(question)
         }
 
     # 🔍 SEARCH
     if intent == "search":
         return {
             "type": "search",
-            "query": payload.question
+            "query": question
         }
 
     # 💬 TEXT
-    answer = ask_llm(payload.question, user=user)
+    answer = ask_llm(question, user=user)
 
     return {
         "type": "text",
         "answer": answer
     }
+
 
         # -----------------------------
         # IMAGE ROUTE
