@@ -1641,23 +1641,14 @@ def ask(payload: AskRequest):
         # -----------------------------
         # IMAGE ROUTE
         # -----------------------------
-        if wants_image(question):
-            try:
-                img = client.images.generate(
-                    model="gpt-image-1",
-                    prompt=question,
-                    size="1024x1024",
-                )
-                return {
-                    "type": "image",
-                    "url": img.data[0].url,
-                    "prompt": question
-                }
-            except Exception as e:
-                return {
-                    "type": "error",
-                    "error": str(e)
-                }
+        def generate_image(prompt: str) -> str:
+    img = client.images.generate(
+        model="gpt-image-1",
+        prompt=prompt,
+        size="1024x1024",
+    )
+    return img.data[0].url
+
 
         # -----------------------------
         # CONTEXT & KNOWLEDGE
