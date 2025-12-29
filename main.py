@@ -1649,10 +1649,10 @@ async def ask(request: Request):
             "query": question
         }
 
-    # 💬 TEXT
-    answer = ask_llm(question, user=user)
+        # 💬 TEXT
+        answer = ask_llm(question, user=user)
 
-    return {
+        return {
         "type": "text",
         "answer": answer
     }
