@@ -1663,8 +1663,9 @@ async def ask(request: Request):
 
     return {
     "type": "text",
-    "answer": "🔥 BACKEND KOMT HIER MET TEKST"
+    "answer": final_answer
 }
+
 
 
 
