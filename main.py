@@ -1662,9 +1662,10 @@ async def ask(request: Request):
         final_answer = "⚠️ Ik kreeg geen inhoudelijk antwoord terug, maar de chat werkt wel 🙂"
 
     return {
-        "type": "text",
-        "answer": final_answer
-    }
+    "type": "text",
+    "answer": "🔥 BACKEND KOMT HIER MET TEKST"
+}
+
 
 
 
