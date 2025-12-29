@@ -5,6 +5,8 @@ from dotenv import load_dotenv
 from openai import OpenAI
 from chat_engine.routes import router as chat_router
 from fastapi.responses import FileResponse
+from fastapi import Request
+
 import os
 import uvicorn
 import requests
@@ -1602,7 +1604,7 @@ def detect_cold_start(sql_ms, kb_ms, ai_ms, total_ms):
 # =============================================================
 
 @app.post("/ask")
-def ask(payload: AskRequest):
+def ask(payload: Request):
     session_id = payload.session_id
     user = get_user_from_session(session_id)
 
