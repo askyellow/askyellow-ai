@@ -1634,10 +1634,11 @@ async def ask(request: Request):
                     "👉 Log in of maak een account aan om dit te gebruiken."
                 )
             }
+        image_url = generate_image(question)
 
         return {
             "type": "image",
-            "url": generate_image(question)
+            "url": image_url
         }
 
     # 🔍 SEARCH
