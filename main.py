@@ -1600,22 +1600,20 @@ def detect_cold_start(sql_ms, kb_ms, ai_ms, total_ms):
         return "⏱️ Slow total"
     return "✓ warm"
 
-    # -----------------------------
-    # IMAGE ROUTE
-    # -----------------------------
-    def generate_image(prompt: str) -> str:
-        img = client.images.generate(
-        model="gpt-image-1",
-        prompt=prompt,
-        size="1024x1024",
-        )
-        return img.data[0].url
+# -----------------------------
+# IMAGE ROUTE
+# -----------------------------
+def generate_image(prompt: str) -> str:
+    img = client.images.generate(
+    model="gpt-image-1",
+    prompt=prompt,
+    size="1024x1024",
+    )
+    return img.data[0].url
 
 # =============================================================
 # MAIN ASK ENDPOINT
 # =============================================================
-
-
 @app.post("/ask")
 async def ask(request: Request):
     payload = await request.json()
@@ -1624,12 +1622,18 @@ async def ask(request: Request):
     session_id = payload.get("session_id")
     language = payload.get("language", "nl")
 
+    # -----------------------------
+    # AUTH
+    # -----------------------------
     conn = get_db_conn()
     user = get_auth_user_from_session(conn, session_id)
     conn.close()
+
     intent = detect_intent(question)
 
-    # 🖼 IMAGE
+    # -----------------------------
+    # IMAGE → DIRECT RETURN
+    # -----------------------------
     if intent == "image":
         if not user:
             return {
@@ -1642,107 +1646,70 @@ async def ask(request: Request):
             "url": generate_image(question)
         }
 
-    # 🔍 SEARCH
+    # -----------------------------
+    # SEARCH → DIRECT RETURN
+    # -----------------------------
     if intent == "search":
         return {
             "type": "search",
             "query": question
         }
 
-        # 💬 TEXT
-        answer = ask_llm(question, user=user)
+    # =============================================================
+    # 💬 TEXT FLOW (OUDE LOGICA – MAG DOORLOPEN)
+    # =============================================================
 
-        return {
-        "type": "text",
-        "answer": answer
-    }
+    # CONTEXT & KNOWLEDGE
+    identity_answer = try_identity_origin_answer(question, language)
+    sql_match = search_sql_knowledge(question)
 
+    try:
+        kb_answer = match_question(question, KNOWLEDGE_ENTRIES)
+    except Exception:
+        kb_answer = None
 
-       
+    hints = {}
 
-        # -----------------------------
-        # CONTEXT & KNOWLEDGE
-        # -----------------------------
-        identity_answer = try_identity_origin_answer(question, language)
-        sql_match = search_sql_knowledge(question)
+    # HISTORY
+    conn = get_db_conn()
+    conv_id, history = get_history_for_model(conn, session_id)
+    conn.close()
 
-        try:
-            kb_answer = match_question(question, KNOWLEDGE_ENTRIES)
-        except Exception:
-            kb_answer = None
+    # LLM CALL
+    start_ai = time.time()
 
-        hints = {}
+    final_answer, raw_output = call_yellowmind_llm(
+        question=question,
+        language=language,
+        kb_answer=kb_answer,
+        sql_match=sql_match,
+        hints=hints,
+        history=history
+    )
 
-        # =============================================================
-        # 🔍 SEARCH INTENT DETECTION
-        # =============================================================
-        SEARCH_TRIGGERS = [
-            "opzoeken",
-            "op zoek",
-            "meest verkocht",
-            "dit jaar",
-            "dit moment",
-            "actueel",
-            "nu populair",
-            "trending",
-            "beste",
-            "vergelijk",
-            "waar koop",
-            "waar kan ik",
-        ]
+    ai_ms = int((time.time() - start_ai) * 1000)
 
-        q_lower = question.lower()
-        if any(trigger in q_lower for trigger in SEARCH_TRIGGERS):
-            return {
-                "type": "search",
-                "query": question
-            }
+    if not final_answer:
+        final_answer = "⚠️ Geen geldig antwoord beschikbaar."
 
-        # =============================================================
-        # 🔥 HISTORY OPHALEN
-        # =============================================================
+    # OPSLAAN
+    try:
         conn = get_db_conn()
-        conv_id, history = get_history_for_model(conn, session_id)
+        save_message(conn, conv_id, "user", question)
+        save_message(conn, conv_id, "assistant", final_answer)
+        conn.commit()
         conn.close()
+    except Exception as e:
+        print("⚠️ Chat history save failed:", e)
 
-        # =============================================================
-        # 🔥 LLM CALL (MET HISTORY)
-        # =============================================================
-        start_ai = time.time()
+    status = detect_cold_start(0, 0, ai_ms, ai_ms)
+    print(f"[STATUS] {status} | AI {ai_ms} ms")
 
-        final_answer, raw_output = call_yellowmind_llm(
-            question=question,
-            language=language,
-            kb_answer=kb_answer,
-            sql_match=sql_match,
-            hints=hints,
-            history=history
-        )
-
-        ai_ms = int((time.time() - start_ai) * 1000)
-
-        if not final_answer:
-            final_answer = "⚠️ Geen geldig antwoord beschikbaar."
-
-        # =============================================================
-        # OPSLAAN
-        # =============================================================
-        try:
-            conn = get_db_conn()
-            save_message(conn, conv_id, "user", question)
-            save_message(conn, conv_id, "assistant", final_answer)
-            conn.commit()
-            conn.close()
-        except Exception as e:
-            print("⚠️ Chat history save failed:", e)
-
-        status = detect_cold_start(0, 0, ai_ms, ai_ms)
-        print(f"[STATUS] {status} | AI {ai_ms} ms")
-
-        return {
-            "answer": final_answer,
-            "output": raw_output,
-            "source": "yellowmind_llm"
-        }
+    return {
+        "type": "text",
+        "answer": final_answer,
+        "output": raw_output,
+        "source": "yellowmind_llm"
+    }
 
 
