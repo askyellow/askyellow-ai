@@ -782,6 +782,12 @@ async def tool_image_generate(request: Request, payload: dict):
         "prompt": prompt,
         "url": url,
     }
+def detect_intent(text: str) -> str:
+    if re.search(r"(afbeelding|image|plaatje|genereer|maak.*(afbeelding|image))", text, re.I):
+        return "image"
+    if re.search(r"(zoek|zoeken|opzoeken)", text, re.I):
+        return "search"
+    return "text"
 
 # =============================================================
 # POSTGRES DB FOR USERS / CONVERSATIONS / MESSAGES
@@ -1596,32 +1602,41 @@ def detect_cold_start(sql_ms, kb_ms, ai_ms, total_ms):
 # =============================================================
 
 @app.post("/ask")
-async def ask_ai(request: Request):
-    try:
-        data = await request.json()
+def ask(payload: AskRequest):
+    session_id = payload.session_id
+    user = get_user_from_session(session_id)
 
-        question = (data.get("question") or "").strip()
-        language = (data.get("language") or "nl").lower()
+    intent = detect_intent(payload.question)
 
-        # -----------------------------
-        # Session ID bepalen
-        # -----------------------------
-        session_id = (
-            data.get("session_id")
-            or data.get("sessionId")
-            or data.get("session")
-            or data.get("sid")
-            or ""
-        )
-        session_id = str(session_id).strip()
-        if not session_id:
-            session_id = "anon-" + secrets.token_hex(8)
+    # 🖼 IMAGE
+    if intent == "image":
+        if not user:
+            return {
+                "type": "error",
+                "code": "login_required_for_image"
+            }
 
-        if not question:
-            return JSONResponse(
-                status_code=400,
-                content={"error": "Geen vraag ontvangen."}
-            )
+        image_url = generate_image(payload.question)
+
+        return {
+            "type": "image",
+            "url": image_url
+        }
+
+    # 🔍 SEARCH
+    if intent == "search":
+        return {
+            "type": "search",
+            "query": payload.question
+        }
+
+    # 💬 TEXT
+    answer = ask_llm(payload.question, user=user)
+
+    return {
+        "type": "text",
+        "answer": answer
+    }
 
         # -----------------------------
         # IMAGE ROUTE
