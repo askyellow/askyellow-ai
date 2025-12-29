@@ -1654,8 +1654,8 @@ async def ask(request: Request):
     intent = detect_intent(question)
 
     # 🖼 IMAGE
-if intent == "image":
-    if not user:
+    if intent == "image":
+        if not user:
         answer = "🖼️ Log in om afbeeldingen te genereren."
         store_message_pair(session_id, question, answer)
         return {
@@ -1677,7 +1677,8 @@ if intent == "image":
     return {
         "type": "image",
         "url": image_url
-    }   
+    }
+
 
     # 🔍 SEARCH
     if intent == "search":
