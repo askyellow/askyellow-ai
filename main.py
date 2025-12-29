@@ -320,6 +320,18 @@ def get_conversation_history_for_model(conn, session_id, limit=12):
     messages = [{"role": r[0], "content": r[1]} for r in rows]
     return {"messages": messages}
 
+def store_message_pair(session_id, user_text, assistant_text):
+    try:
+        conn = get_db_conn()
+        conv_id, _ = get_history_for_model(conn, session_id)
+        save_message(conn, conv_id, "user", user_text)
+        save_message(conn, conv_id, "assistant", assistant_text)
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print("⚠️ History save failed:", e)
+
+
 @app.post("/chat")
 async def chat(payload: dict):
     session_id = payload.get("session_id")
@@ -1642,25 +1654,30 @@ async def ask(request: Request):
     intent = detect_intent(question)
 
     # 🖼 IMAGE
-    if intent == "image":
-        if not user:
-            return {
-                "type": "error",
-                "answer": "🖼️ Log in om afbeeldingen te genereren."
-            }
-
-        image_url = generate_image(question)
-
-        if not image_url:
-            return {
-                "type": "error",
-                "answer": "⚠️ Het genereren van de afbeelding is mislukt. Probeer het opnieuw."
-            }
-
+if intent == "image":
+    if not user:
+        answer = "🖼️ Log in om afbeeldingen te genereren."
+        store_message_pair(session_id, question, answer)
         return {
-            "type": "image",
-            "url": image_url
+            "type": "error",
+            "answer": answer
         }
+
+    image_url = generate_image(question)
+
+    if not image_url:
+        answer = "⚠️ Afbeelding genereren mislukt."
+        store_message_pair(session_id, question, answer)
+        return {
+            "type": "error",
+            "answer": answer
+        }
+
+    store_message_pair(session_id, question, f"[IMAGE]{image_url}")
+    return {
+        "type": "image",
+        "url": image_url
+    }   
 
     # 🔍 SEARCH
     if intent == "search":
