@@ -1659,6 +1659,7 @@ if intent == "image":
         "type": "image",
         "url": image_url
     }
+
  
 
     # 🔍 SEARCH
