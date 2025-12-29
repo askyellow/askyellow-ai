@@ -1625,6 +1625,8 @@ def generate_image(prompt: str) -> str:
 # =============================================================
 # MAIN ASK ENDPOINT
 # =============================================================
+
+
 @app.post("/ask")
 async def ask(request: Request):
     payload = await request.json()
@@ -1640,27 +1642,25 @@ async def ask(request: Request):
     intent = detect_intent(question)
 
     # 🖼 IMAGE
-if intent == "image":
-    if not user:
+    if intent == "image":
+        if not user:
+            return {
+                "type": "error",
+                "answer": "🖼️ Log in om afbeeldingen te genereren."
+            }
+
+        image_url = generate_image(question)
+
+        if not image_url:
+            return {
+                "type": "error",
+                "answer": "⚠️ Het genereren van de afbeelding is mislukt. Probeer het opnieuw."
+            }
+
         return {
-            "type": "error",
-            "answer": "🖼️ Log in om afbeeldingen te genereren."
+            "type": "image",
+            "url": image_url
         }
-
-    image_url = generate_image(question)
-
-    if not image_url:
-        return {
-            "type": "error",
-            "answer": "⚠️ Het genereren van de afbeelding is mislukt. Probeer het opnieuw."
-        }
-
-    return {
-        "type": "image",
-        "url": image_url
-    }
-
- 
 
     # 🔍 SEARCH
     if intent == "search":
@@ -1683,10 +1683,9 @@ if intent == "image":
         final_answer = "⚠️ Ik kreeg geen inhoudelijk antwoord terug, maar de chat werkt wel 🙂"
 
     return {
-    "type": "text",
-    "answer": final_answer
-}
-
+        "type": "text",
+        "answer": final_answer
+    }
 
 
 
