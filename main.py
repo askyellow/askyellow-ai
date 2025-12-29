@@ -1640,23 +1640,26 @@ async def ask(request: Request):
     intent = detect_intent(question)
 
     # 🖼 IMAGE
-    if intent == "image":
-        if not user:
-            return {
-                "type": "error",
-                "code": "login_required_for_image",
-                "answer": (
-                    "🖼️ Ik kan afbeeldingen genereren, "
-                    "maar dat is alleen beschikbaar voor ingelogde gebruikers.\n\n"
-                    "👉 Log in of maak een account aan om dit te gebruiken."
-                )
-            }
-        image_url = generate_image(question)
-
+if intent == "image":
+    if not user:
         return {
-            "type": "image",
-            "url": image_url
+            "type": "error",
+            "answer": "🖼️ Log in om afbeeldingen te genereren."
         }
+
+    image_url = generate_image(question)
+
+    if not image_url:
+        return {
+            "type": "error",
+            "answer": "⚠️ Het genereren van de afbeelding is mislukt. Probeer het opnieuw."
+        }
+
+    return {
+        "type": "image",
+        "url": image_url
+    }
+ 
 
     # 🔍 SEARCH
     if intent == "search":
