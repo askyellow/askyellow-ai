@@ -1629,16 +1629,16 @@ async def ask(request: Request):
     # IMAGE → DIRECT RETURN
     # -----------------------------
     if intent == "image":
-    if not user:
-        return {
-            "type": "error",
-            "code": "login_required_for_image",
-            "answer": (
-                "🖼️ Ik kan afbeeldingen genereren, "
-                "maar dat is alleen beschikbaar voor ingelogde gebruikers.\n\n"
-                "👉 Log in of maak een account aan om dit te gebruiken."
-            )
-        }
+        if not user:
+            return {
+                "type": "error",
+                "code": "login_required_for_image",
+                "answer": (
+                    "🖼️ Ik kan afbeeldingen genereren, "
+                    "maar dat is alleen beschikbaar voor ingelogde gebruikers.\n\n"
+                    "👉 Log in of maak een account aan om dit te gebruiken."
+                )
+            }
 
     return {
         "type": "image",
