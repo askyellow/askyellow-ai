@@ -1700,7 +1700,8 @@ async def ask(request: Request):
     conn = get_db_conn()
     _, history = get_history_for_model(conn, session_id)
     conn.close()
-        final_answer, raw_output = call_yellowmind_llm(
+
+    final_answer, raw_output = call_yellowmind_llm(
         question=question,
         language=language,
         kb_answer=None,
