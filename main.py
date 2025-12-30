@@ -1694,30 +1694,26 @@ async def ask(request: Request):
             "query": question
         }
 
-# -----------------------------
-# 💬 TEXT
-# -----------------------------
-conn = get_db_conn()
-_, history = get_history_for_model(conn, session_id)
-conn.close()
-
-final_answer, raw_output = call_yellowmind_llm(
-    question=question,
-    language=language,
-    kb_answer=None,
-    sql_match=None,
-    hints={},
-    history=history
-)
-
-if not final_answer:
-    final_answer = "⚠️ Ik kreeg geen inhoudelijk antwoord terug, maar de chat werkt wel 🙂"
-
-store_message_pair(session_id, question, final_answer)
-
-    return {
-        "type": "text",
-        "answer": final_answer
-    }
-    
+    # -----------------------------
+    # 💬 TEXT
+    # -----------------------------
+    conn = get_db_conn()
+    _, history = get_history_for_model(conn, session_id)
+    conn.close()
+        final_answer, raw_output = call_yellowmind_llm(
+        question=question,
+        language=language,
+        kb_answer=None,
+        sql_match=None,
+        hints={},
+        history=history
+    )
+    if not final_answer:
+        final_answer = "⚠️ Ik kreeg geen inhoudelijk antwoord terug, maar de chat werkt wel 🙂"
+        store_message_pair(session_id, question, final_answer)
+        return {
+            "type": "text",
+            "answer": final_answer
+        }
+   
 
