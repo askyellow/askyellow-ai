@@ -1718,6 +1718,6 @@ store_message_pair(session_id, question, final_answer)
     return {
         "type": "text",
         "answer": final_answer
-}
+    }
     
 
