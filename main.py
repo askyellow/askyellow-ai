@@ -1697,21 +1697,23 @@ async def ask(request: Request):
     conn = get_db_conn()
     _, history = get_history_for_model(conn, session_id)
     conn.close()
- 
+
+    from tools.websearch import run_websearch
     from search.web_context import build_web_context
+
+    web_results = run_websearch(question)
     web_context = build_web_context(web_results)
 
     final_answer, _ = call_yellowmind_llm(
-    question=question,
-    language=language,
-    kb_answer=None,
-    sql_match=None,
-    hints={
-        "web_context": web_context
-    },
-    history=history
+        question=question,
+        language=language,
+        kb_answer=None,
+        sql_match=None,
+        hints={
+            "web_context": web_context
+        },
+        history=history
 )
-   
 
 
     if not final_answer:
