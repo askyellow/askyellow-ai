@@ -1061,7 +1061,6 @@ def get_or_create_user_for_auth(conn, auth_user_id: int, session_id: str):
     conn.commit()
     return user_id
 
-
     cur.execute(
         """
         INSERT INTO users (session_id)
@@ -1584,6 +1583,13 @@ def call_yellowmind_llm(
             "role": "system",
             "content": hints["web_context"]
         })
+
+    if is_time_question:
+        return {
+            "type": "text",
+            "answer": f"Vandaag is het {today_string()}."
+        }
+    
 
     # 🔹 Conversatiegeschiedenis
     if history:
