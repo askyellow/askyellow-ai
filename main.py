@@ -43,6 +43,37 @@ def normalize_password(password: str) -> str:
         return ""
     return password.strip()
 
+def run_websearch_internal(query: str) -> list:
+    """
+    Interne helper die dezelfde logica gebruikt als /tool/websearch
+    maar dan direct in Python.
+    """
+    if not query or not SERPER_API_KEY:
+        return []
+
+    url = "https://google.serper.dev/search"
+    headers = {
+        "X-API-KEY": SERPER_API_KEY,
+        "Content-Type": "application/json",
+    }
+    body = {"q": query}
+
+    try:
+        r = requests.post(url, json=body, headers=headers, timeout=10)
+        data = r.json()
+    except Exception as e:
+        print("⚠️ Internal websearch error:", e)
+        return []
+
+    results = []
+    for item in data.get("organic", [])[:3]:
+        results.append({
+            "title": item.get("title"),
+            "snippet": item.get("snippet"),
+            "url": item.get("link"),
+        })
+
+    return results
 
 # =============================================================
 # SHOPIFY FUNCTIONS
@@ -1535,6 +1566,12 @@ def call_yellowmind_llm(
         }
     ]
 
+if hints and hints.get("web_context"):
+    messages.append({
+        "role": "system",
+        "content": hints["web_context"]
+    })
+
     if history:
         for msg in history:
             messages.append({
@@ -1698,10 +1735,9 @@ async def ask(request: Request):
     _, history = get_history_for_model(conn, session_id)
     conn.close()
 
-    from tools.websearch import run_websearch
     from search.web_context import build_web_context
 
-    web_results = run_websearch(question)
+    web_results = run_websearch_internal(question)
     web_context = build_web_context(web_results)
 
     final_answer, _ = call_yellowmind_llm(
@@ -1713,8 +1749,7 @@ async def ask(request: Request):
             "web_context": web_context
         },
         history=history
-)
-
+    )
 
     if not final_answer:
         final_answer = "⚠️ Ik kreeg geen inhoudelijk antwoord terug, maar de chat werkt wel 🙂"
@@ -1725,6 +1760,7 @@ async def ask(request: Request):
     "type": "text",
     "answer": final_answer
 }
+
 
 
 
