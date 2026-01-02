@@ -1565,11 +1565,7 @@ def call_yellowmind_llm(
     hints,
     history=None
 ):
-    hints = {
-    "time_context": TIME_CONTEXT.system_prompt(),
-    "web_context": web_context
-}
-
+   
     messages = [
         {
             "role": "system",
@@ -1759,7 +1755,10 @@ async def ask(request: Request):
 
     web_results = run_websearch_internal(question)
     web_context = build_web_context(web_results)
-
+    hints = {
+    "time_context": TIME_CONTEXT.system_prompt(),
+    "web_context": web_context
+}
     final_answer, _ = call_yellowmind_llm(
         question=question,
         language=language,
