@@ -36,6 +36,7 @@ from passlib.context import CryptContext
 from passlib.context import CryptContext
 from core.time_context import build_time_context
 
+CORE_TIME_CONTEXT = build_time_context()
 
 pwd_context = CryptContext(
     schemes=["bcrypt_sha256", "scrypt"],
