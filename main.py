@@ -6,7 +6,6 @@ from openai import OpenAI
 from chat_engine.routes import router as chat_router
 from fastapi.responses import FileResponse
 from fastapi import Request
-from search.web_context import build_web_context
 
 import os
 import uvicorn
@@ -45,6 +44,7 @@ def normalize_password(password: str) -> str:
     return password.strip()
 
 web_context = build_web_context(web_results)
+from search.web_context import build_web_context
 
 # =============================================================
 # SHOPIFY FUNCTIONS
