@@ -7,6 +7,9 @@ from openai import OpenAI
 from chat_engine.routes import router as chat_router
 from fastapi.responses import FileResponse
 from fastapi import Request
+from core.time import TimeContext
+
+TIME_CONTEXT = TimeContext()
 
 import os
 import uvicorn
@@ -33,15 +36,7 @@ from passlib.context import CryptContext
 from passlib.context import CryptContext
 from core.time_context import build_time_context
 
-CORE_TIME_CONTEXT = build_time_context()
 
-NOW = datetime.utcnow()
-
-CORE_TIME_CONTEXT = {
-    "current_date": NOW.strftime("%Y-%m-%d"),
-    "current_year": NOW.year,
-    "latest_year_change": f"31 december {NOW.year - 1}",
-}
 pwd_context = CryptContext(
     schemes=["bcrypt_sha256", "scrypt"],
     deprecated="auto"
@@ -1567,7 +1562,11 @@ def call_yellowmind_llm(
     language,
     kb_answer,
     sql_match,
-    hints,
+    hints = {
+    "time_context": TIME_CONTEXT.system_prompt(),
+    "web_context": web_context
+}
+,
     history=None
 ):
     messages = [
