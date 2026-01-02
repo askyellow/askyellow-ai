@@ -1562,13 +1562,14 @@ def call_yellowmind_llm(
     language,
     kb_answer,
     sql_match,
+    hints,
+    history=None
+):
     hints = {
     "time_context": TIME_CONTEXT.system_prompt(),
     "web_context": web_context
 }
-,
-    history=None
-):
+
     messages = [
         {
             "role": "system",
