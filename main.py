@@ -1691,7 +1691,6 @@ async def ask(request: Request):
     if intent == "search":
         intent = "text"
 
-
     # -----------------------------
     # 💬 TEXT
     # -----------------------------
@@ -1707,12 +1706,18 @@ async def ask(request: Request):
         hints={},
         history=history
     )
+
     if not final_answer:
         final_answer = "⚠️ Ik kreeg geen inhoudelijk antwoord terug, maar de chat werkt wel 🙂"
-        store_message_pair(session_id, question, final_answer)
-        return {
-            "type": "text",
-            "answer": final_answer
-        }
+
+    store_message_pair(session_id, question, final_answer)
+
+    return {
+    "type": "text",
+    "answer": final_answer
+}
+
+
+
    
 
