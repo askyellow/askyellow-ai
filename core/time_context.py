@@ -9,3 +9,5 @@ def build_time_context() -> str:
         "Relatieve termen zoals 'afgelopen jaarwisseling', "
         "'recent' en 'vorig jaar' verwijzen naar deze context."
     )
+def today_string():
+    return datetime.now(timezone.utc).strftime("%A %d %B %Y")
