@@ -1,3 +1,4 @@
+from pyexpat.errors import messages
 from fastapi import FastAPI, Request, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, JSONResponse
@@ -1566,12 +1567,14 @@ def call_yellowmind_llm(
         }
     ]
 
-if hints and hints.get("web_context"):
-    messages.append({
-        "role": "system",
-        "content": hints["web_context"]
-    })
+    # 🔹 Webcontext toevoegen (Fase 1)
+    if hints and hints.get("web_context"):
+        messages.append({
+            "role": "system",
+            "content": hints["web_context"]
+        })
 
+    # 🔹 Conversatiegeschiedenis
     if history:
         for msg in history:
             messages.append({
@@ -1579,6 +1582,7 @@ if hints and hints.get("web_context"):
                 "content": msg["content"]
             })
 
+    # 🔹 User vraag
     messages.append({
         "role": "user",
         "content": question
@@ -1598,24 +1602,25 @@ if hints and hints.get("web_context"):
 
     # 🔒 Airbag: verboden zinnen filteren
     BANNED_PHRASES = [
-    "geen toegang",
-    "geen toegang heb",
-    "geen toegang heeft",
-    "niet rechtstreeks opzoeken",
-    "kan dat niet opzoeken",
-    "kan dit niet opzoeken",
-    "live websearch",
-    "realtime websearch",
-    "websearch",
-    "internet",
-    "online opzoeken",
-    "als ai",
-    "sorry",
-]
+        "geen toegang",
+        "geen toegang heb",
+        "geen toegang heeft",
+        "niet rechtstreeks opzoeken",
+        "kan dat niet opzoeken",
+        "kan dit niet opzoeken",
+        "live websearch",
+        "realtime websearch",
+        "websearch",
+        "internet",
+        "online opzoeken",
+        "als ai",
+        "sorry",
+    ]
+
     lower_answer = final_answer.lower()
-    
+
     for phrase in BANNED_PHRASES:
-        if phrase in final_answer.lower():
+        if phrase in lower_answer:
             final_answer = (
                 "Ik help je hier graag bij. "
                 "Kun je iets specifieker aangeven wat je zoekt?"
@@ -1623,6 +1628,7 @@ if hints and hints.get("web_context"):
             break
 
     return final_answer, []
+
 
 
 
