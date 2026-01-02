@@ -32,6 +32,13 @@ from passlib.context import CryptContext
 
 from passlib.context import CryptContext
 
+NOW = datetime.utcnow()
+
+CORE_TIME_CONTEXT = {
+    "current_date": NOW.strftime("%Y-%m-%d"),
+    "current_year": NOW.year,
+    "latest_year_change": f"31 december {NOW.year - 1}",
+}
 pwd_context = CryptContext(
     schemes=["bcrypt_sha256", "scrypt"],
     deprecated="auto"
