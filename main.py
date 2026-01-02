@@ -6,6 +6,7 @@ from openai import OpenAI
 from chat_engine.routes import router as chat_router
 from fastapi.responses import FileResponse
 from fastapi import Request
+from search.web_context import build_web_context
 
 import os
 import uvicorn
@@ -1519,6 +1520,7 @@ def wants_image(q: str) -> bool:
 # =============================================================
 # 6. OPENAI CALL — FIXED FOR o3 RESPONSE FORMAT (SAFE)
 # =============================================================
+web_context = build_web_context(web_results)
 
 def call_yellowmind_llm(
     question,
@@ -1698,14 +1700,17 @@ async def ask(request: Request):
     _, history = get_history_for_model(conn, session_id)
     conn.close()
 
-    final_answer, raw_output = call_yellowmind_llm(
-        question=question,
-        language=language,
-        kb_answer=None,
-        sql_match=None,
-        hints={},
-        history=history
-    )
+    final_answer, _ = call_yellowmind_llm(
+    question=question,
+    language=language,
+    kb_answer=None,
+    sql_match=None,
+    hints={
+        "web_context": web_context
+    },
+    history=history
+)
+
 
     if not final_answer:
         final_answer = "⚠️ Ik kreeg geen inhoudelijk antwoord terug, maar de chat werkt wel 🙂"
