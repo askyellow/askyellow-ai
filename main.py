@@ -44,6 +44,7 @@ def normalize_password(password: str) -> str:
         return ""
     return password.strip()
 
+web_context = build_web_context(web_results)
 
 # =============================================================
 # SHOPIFY FUNCTIONS
@@ -1520,7 +1521,6 @@ def wants_image(q: str) -> bool:
 # =============================================================
 # 6. OPENAI CALL — FIXED FOR o3 RESPONSE FORMAT (SAFE)
 # =============================================================
-web_context = build_web_context(web_results)
 
 def call_yellowmind_llm(
     question,
