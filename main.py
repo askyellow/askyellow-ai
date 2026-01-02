@@ -1576,6 +1576,17 @@ def call_yellowmind_llm(
             "content": SYSTEM_PROMPT
         }
     ]
+    if hints and hints.get("time_context"):
+        messages.append({
+            "role": "system",
+            "content": hints["time_context"]
+        })
+
+    if hints and hints.get("web_context"):
+        messages.append({
+            "role": "system",
+            "content": hints["web_context"]
+        })
 
     # 🔹 Conversatiegeschiedenis
     if history:
