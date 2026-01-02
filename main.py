@@ -32,6 +32,8 @@ from passlib.context import CryptContext
 
 from passlib.context import CryptContext
 
+CORE_TIME_CONTEXT = build_time_context()
+
 NOW = datetime.utcnow()
 
 CORE_TIME_CONTEXT = {
@@ -1573,13 +1575,19 @@ def call_yellowmind_llm(
             "content": SYSTEM_PROMPT
         }
     ]
+# 🔹 TIJD-CONTEXT (CORE — ALTIJD EERST)
+    if hints and hints.get("time_context"):
+        messages.append({
+            "role": "system",
+            "content": hints["time_context"]
+    })
 
-    # 🔹 Webcontext toevoegen (Fase 1)
+# 🔹 WEB-CONTEXT (FASE 1 SEARCH)
     if hints and hints.get("web_context"):
         messages.append({
             "role": "system",
             "content": hints["web_context"]
-        })
+    })
 
     # 🔹 Conversatiegeschiedenis
     if history:
@@ -1763,6 +1771,19 @@ async def ask(request: Request):
         },
         history=history
     )
+    # Tijd komt altijd eerst
+    if hints and hints.get("time_context"):
+        messages.append({
+            "role": "system",
+            "content": hints["time_context"]
+        })
+
+# Daarna webcontext
+    if hints and hints.get("web_context"):
+        messages.append({
+            "role": "system",
+            "content": hints["web_context"]
+    })
 
     if not final_answer:
         final_answer = "⚠️ Ik kreeg geen inhoudelijk antwoord terug, maar de chat werkt wel 🙂"
