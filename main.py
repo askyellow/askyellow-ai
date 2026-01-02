@@ -43,8 +43,6 @@ def normalize_password(password: str) -> str:
         return ""
     return password.strip()
 
-web_context = build_web_context(web_results)
-from search.web_context import build_web_context
 
 # =============================================================
 # SHOPIFY FUNCTIONS
@@ -1699,6 +1697,9 @@ async def ask(request: Request):
     conn = get_db_conn()
     _, history = get_history_for_model(conn, session_id)
     conn.close()
+ 
+    from search.web_context import build_web_context
+    web_context = build_web_context(web_results)
 
     final_answer, _ = call_yellowmind_llm(
     question=question,
@@ -1710,6 +1711,7 @@ async def ask(request: Request):
     },
     history=history
 )
+   
 
 
     if not final_answer:
