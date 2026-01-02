@@ -1770,20 +1770,7 @@ async def ask(request: Request):
         },
         history=history
     )
-    # Tijd komt altijd eerst
-    if hints and hints.get("time_context"):
-        messages.append({
-            "role": "system",
-            "content": hints["time_context"]
-        })
-
-# Daarna webcontext
-    if hints and hints.get("web_context"):
-        messages.append({
-            "role": "system",
-            "content": hints["web_context"]
-    })
-
+    
     if not final_answer:
         final_answer = "⚠️ Ik kreeg geen inhoudelijk antwoord terug, maar de chat werkt wel 🙂"
 
