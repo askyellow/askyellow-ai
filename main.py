@@ -1584,13 +1584,6 @@ def call_yellowmind_llm(
             "content": hints["web_context"]
         })
 
-    if is_time_question:
-        return {
-            "type": "text",
-            "answer": f"Vandaag is het {today_string()}."
-        }
-    
-
     # 🔹 Conversatiegeschiedenis
     if history:
         for msg in history:
@@ -1716,6 +1709,12 @@ async def ask(request: Request):
 
     intent = detect_intent(question)
 
+    if is_time_question:
+        return {
+            "type": "text",
+            "answer": f"Vandaag is het {today_string()}."
+        }
+    
     # =============================================================
     # 🖼 IMAGE
     # =============================================================
