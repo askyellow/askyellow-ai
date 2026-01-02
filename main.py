@@ -1576,19 +1576,6 @@ def call_yellowmind_llm(
             "content": SYSTEM_PROMPT
         }
     ]
-# 🔹 TIJD-CONTEXT (CORE — ALTIJD EERST)
-    if hints and hints.get("time_context"):
-        messages.append({
-            "role": "system",
-            "content": hints["time_context"]
-    })
-
-# 🔹 WEB-CONTEXT (FASE 1 SEARCH)
-    if hints and hints.get("web_context"):
-        messages.append({
-            "role": "system",
-            "content": hints["web_context"]
-    })
 
     # 🔹 Conversatiegeschiedenis
     if history:
