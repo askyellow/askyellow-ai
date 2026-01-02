@@ -1709,12 +1709,25 @@ async def ask(request: Request):
 
     intent = detect_intent(question)
 
+    # 🕒 TIJDVRAGEN — DIRECT NA INTENT
+    TIME_KEYWORDS = [
+        "vandaag",
+        "welke dag is het",
+        "wat voor dag is het",
+        "laatste jaarwisseling",
+        "afgelopen jaarwisseling",
+    ]
+
+    is_time_question = any(k in question.lower() for k in TIME_KEYWORDS)
+
     if is_time_question:
+        answer = f"Vandaag is het {TIME_CONTEXT.today_string()}."
+        store_message_pair(session_id, question, answer)
         return {
             "type": "text",
-            "answer": f"Vandaag is het {today_string()}."
+            "answer": answer
         }
-    
+
     # =============================================================
     # 🖼 IMAGE
     # =============================================================
@@ -1746,7 +1759,6 @@ async def ask(request: Request):
     # =============================================================
     # 🔍 SEARCH
     # =============================================================
-    # 🔍 SEARCH (search.html gebruikt /ask als AI)
     if intent == "search":
         intent = "text"
 
@@ -1761,30 +1773,30 @@ async def ask(request: Request):
 
     web_results = run_websearch_internal(question)
     web_context = build_web_context(web_results)
+
     hints = {
-    "time_context": TIME_CONTEXT.system_prompt(),
-    "web_context": web_context
-}
+        "time_context": TIME_CONTEXT.system_prompt(),
+        "web_context": web_context
+    }
+
     final_answer, _ = call_yellowmind_llm(
         question=question,
         language=language,
         kb_answer=None,
         sql_match=None,
-        hints={
-            "web_context": web_context
-        },
+        hints=hints,
         history=history
     )
-    
+
     if not final_answer:
         final_answer = "⚠️ Ik kreeg geen inhoudelijk antwoord terug, maar de chat werkt wel 🙂"
 
     store_message_pair(session_id, question, final_answer)
 
     return {
-    "type": "text",
-    "answer": final_answer
-}
+        "type": "text",
+        "answer": final_answer
+    }
 
 
 
