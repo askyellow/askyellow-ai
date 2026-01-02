@@ -1687,12 +1687,10 @@ async def ask(request: Request):
     # =============================================================
     # 🔍 SEARCH
     # =============================================================
+    # 🔍 SEARCH (search.html gebruikt /ask als AI)
     if intent == "search":
-        store_message_pair(session_id, question, f"[SEARCH]{question}")
-        return {
-            "type": "search",
-            "query": question
-        }
+        intent = "text"
+
 
     # -----------------------------
     # 💬 TEXT
