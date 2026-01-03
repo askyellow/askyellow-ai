@@ -4,7 +4,7 @@ class TimeContext:
     def __init__(self):
         self.now = datetime.now(timezone.utc)
 
-    def build_context(self) -> str:
+    def system_prompt(self) -> str:
         return (
             f"Huidige datum: {self.now.strftime('%d %B %Y')}. "
             f"De meest recente jaarwisseling vond plaats op "
