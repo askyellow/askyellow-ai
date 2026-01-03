@@ -32,7 +32,7 @@ from fastapi import APIRouter, Request
 from passlib.context import CryptContext
 
 from passlib.context import CryptContext
-from core.time_context import build_time_context
+from core.time_context import TimeContext
 
 
 TIME_CONTEXT = TimeContext()
@@ -42,7 +42,7 @@ answer = (
     f"en het is nu {TIME_CONTEXT.time_string()}."
 )
 
-CORE_TIME_CONTEXT = build_time_context()
+TIME_CONTEXT = TimeContext()
 
 pwd_context = CryptContext(
     schemes=["bcrypt_sha256", "scrypt"],
