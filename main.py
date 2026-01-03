@@ -9,8 +9,6 @@ from fastapi.responses import FileResponse
 from fastapi import Request
 from core.time import TimeContext
 
-TIME_CONTEXT = TimeContext()
-
 import os
 import uvicorn
 import requests
@@ -35,6 +33,14 @@ from passlib.context import CryptContext
 
 from passlib.context import CryptContext
 from core.time_context import build_time_context
+
+
+TIME_CONTEXT = TimeContext()
+
+answer = (
+    f"Vandaag is het {TIME_CONTEXT.today_string()} "
+    f"en het is nu {TIME_CONTEXT.time_string()}."
+)
 
 CORE_TIME_CONTEXT = build_time_context()
 
