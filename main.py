@@ -1553,6 +1553,13 @@ def call_yellowmind_llm(
         print(i, m["role"], m["content"][:80])
     print("========================")
 
+    import json
+
+    print("🔴 MESSAGE COUNT:", len(messages))
+    print("🔴 FIRST MESSAGE:", messages[0])
+    print("🔴 LAST MESSAGE:", messages[-1])
+    print("🔴 RAW SIZE:", len(json.dumps(messages)))
+
     ai = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=messages
