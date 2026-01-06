@@ -1560,6 +1560,14 @@ def call_yellowmind_llm(
     print("🔴 LAST MESSAGE:", messages[-1])
     print("🔴 RAW SIZE:", len(json.dumps(messages)))
 
+    for i, m in enumerate(messages):
+        size = len(m.get("content", ""))
+        if size > 5000:
+            print(f"🚨 MESSAGE {i} ROLE={m['role']} SIZE={size}")
+
+    print("MAX MESSAGE SIZE:", max(len(m["content"]) for m in messages))
+
+
     ai = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=messages
