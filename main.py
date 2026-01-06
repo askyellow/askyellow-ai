@@ -1533,14 +1533,25 @@ def call_yellowmind_llm(
             "role": "system",
             "content": hints["web_context"]
         })
-
-    # 🔹 Conversatiegeschiedenis
+# Conversatiegeschiedenis (LLM-context)
     if history:
         for msg in history:
+            content = msg.get("content")
+
+            # 🚫 alleen strings
+            if not isinstance(content, str):
+                continue
+
+            # 🚫 images nooit naar het model
+            if content.startswith("[IMAGE]"):
+                continue
+
             messages.append({
-                "role": msg["role"],
-                "content": msg["content"]
-            })
+                "role": msg.get("role", "user"),
+                "content": content[:2000]  # harde safety cap
+        })
+
+    
 
     # 🔹 User vraag
     messages.append({
