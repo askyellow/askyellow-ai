@@ -416,10 +416,15 @@ async def chat(payload: dict):
         "content": user_input
     })
 
+    # absolute noodrem
+    messages = messages[:20]
+
+
     # 3️⃣ OpenAI call
     ai_response = client.chat.completions.create(
         model="gpt-4.1-mini",
-        messages=messages_for_model
+        messages=messages_for_model,
+        max_tokens=500
     )
 
     answer = extract_text_from_response(ai_response)
