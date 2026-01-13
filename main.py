@@ -36,7 +36,7 @@ from core.time_context import TimeContext
 
 from routes import health
 
-app.include_router(health.router, include_in_schema=False)
+include_router(health.router, include_in_schema=False)
 
 TIME_CONTEXT = TimeContext()
 
