@@ -10,7 +10,7 @@ from llm import call_yellowmind_llm
 from chat import router as chat_router
 from image_shared import detect_intent, handle_image_intent
 from db import get_db_conn, init_db
-from knowledge import search_knowledge
+# from knowledge import search_knowledge
 from ask_handler import router as ask_router
 from websearch import router as websearch_router
 
