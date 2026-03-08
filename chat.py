@@ -118,16 +118,14 @@ async def chat_with_uploaded_image(
 
     image_bytes, mime_type = await read_and_validate_upload(file)
 
-    # ✅ originele upload opslaan als renderbare data-url in chat history
-    original_image_data_url = (
-        f"data:{mime_type};base64,{base64.b64encode(image_bytes).decode('utf-8')}"
-    )
-    user_log_text = f"[USER_IMAGE]{message or 'uploaded image'}"
     conn = get_conn()
     history = get_history_for_llm(conn, session_id)
     conn.close()
 
     operation = detect_uploaded_image_operation(message)
+
+    # ✅ veilige, korte logregel terug
+    user_log_text = f"[USER_IMAGE]{message or 'uploaded image'}"
 
     if operation == "edit":
         prompt = (message or "").strip()
