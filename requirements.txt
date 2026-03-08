@@ -11,3 +11,5 @@ passlib[bcrypt]
 bcrypt
 bcrypt<4.0
 resend
+pymysql
+python-multipart>=0.0.9

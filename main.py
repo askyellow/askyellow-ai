@@ -9,6 +9,10 @@ from core.time_context import build_time_context
 from llm import call_yellowmind_llm
 from chat import router as chat_router
 from image_shared import detect_intent, handle_image_intent
+from db import get_db_conn, init_db
+from knowledge import search_knowledge
+from ask_handler import router as ask_router
+from websearch import router as websearch_router
 
 
 app = FastAPI(title="YellowMind API")
@@ -38,13 +42,21 @@ from chat_shared import (
     get_auth_user_from_session,
     get_history_for_model, store_message_pair,
 )
-
 from routes.health import router as health_router
+from affiliate_search import router as affiliate_router
+
+from search_v2.router import router as search_v2_router
+app.include_router(search_v2_router)
+
 app.include_router(health_router, include_in_schema=False)
 app.include_router(chat_router)
 app.include_router(image_generate)
+app.include_router(ask_router)
+app.include_router(websearch_router)
+app.include_router(affiliate_router)
 
 time_context = build_time_context()
+SERPER_API_KEY = os.getenv("SERPER_API_KEY")
 
 pwd_context = CryptContext(
     schemes=["bcrypt_sha256", "scrypt"],
@@ -346,46 +358,6 @@ def load_file(path: str) -> str:
 # 3. TOOL ENDPOINTS (WEBSEARCH / SHOPIFY / KNOWLEDGE / IMAGE)
 # =============================================================
 
-# ---- Websearch Tool (Serper) ----
-SERPER_API_KEY = os.getenv("SERPER_API_KEY")
-
-@app.post("/tool/websearch")
-async def tool_websearch(payload: dict):
-    """Proxy naar Serper API voor webresultaten."""
-    query = (payload.get("query") or "").strip()
-    if not query:
-        raise HTTPException(status_code=400, detail="Query missing")
-
-    if not SERPER_API_KEY:
-        raise HTTPException(status_code=500, detail="SERPER_API_KEY ontbreekt op de server")
-
-    url = "https://google.serper.dev/search"
-    headers = {
-        "X-API-KEY": SERPER_API_KEY,
-        "Content-Type": "application/json",
-    }
-    body = {"q": query}
-
-    try:
-        r = requests.post(url, json=body, headers=headers, timeout=10)
-        data = r.json()
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Websearch error: {e}")
-
-    results = []
-    for item in data.get("organic", [])[:4]:
-        results.append({
-            "title": item.get("title"),
-            "snippet": item.get("snippet"),
-            "url": item.get("link"),
-        })
-
-    return {
-        "tool": "websearch",
-        "query": query,
-        "results": results,
-    }
-
 
 # ---- Shopify Search Tool 2.0 (title + body + tags + fuzzy) ----
 SHOPIFY_STORE = os.getenv("SHOPIFY_STORE_URL")
@@ -561,116 +533,20 @@ async def tool_shopify_search(payload: dict):
     }
 
 
-# ---- Knowledge Search Tool ----
+# # ---- Knowledge Search Tool ----
 @app.post("/tool/knowledge_search")
 async def tool_knowledge_search(payload: dict):
-    """Maakt gebruik van de bestaande Python knowledge engine."""
     query = (payload.get("query") or "").strip()
     if not query:
         raise HTTPException(status_code=400, detail="Missing query")
 
-    # Gebruik de al geladen KNOWLEDGE_ENTRIES + match_question
-    kb_answer = match_question(query, KNOWLEDGE_ENTRIES)
+    kb_answer = search_knowledge(query)
     return {
         "tool": "knowledge_search",
         "query": query,
         "answer": kb_answer,
     }
-# =============================================================
-# POSTGRES DB FOR USERS / CONVERSATIONS / MESSAGES
-# =============================================================
 
-# DATABASE_URL komt uit de Render-omgeving
-DATABASE_URL = os.getenv("DATABASE_URL")
-if not DATABASE_URL:
-    raise RuntimeError("DATABASE_URL is niet ingesteld (env var DATABASE_URL).")
-
-def get_db_conn():
-    """Open een nieuwe PostgreSQL-verbinding met dict-rows."""
-    conn = psycopg2.connect(
-        DATABASE_URL,
-        cursor_factory=psycopg2.extras.RealDictCursor
-    )
-    return conn
-
-def get_db():
-    """FastAPI dependency die de verbinding automatisch weer sluit."""
-    conn = get_db_conn()
-    try:
-        yield conn
-    finally:
-        conn.close()
-
-def init_db():
-    """Maak basis-tabellen aan als ze nog niet bestaan."""
-    conn = get_db_conn()
-    cur = conn.cursor()
-
-    # Users: 1 rij per (anon/persoonlijke) sessie
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS users (
-            id SERIAL PRIMARY KEY,
-            session_id TEXT UNIQUE NOT NULL,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        );
-        """
-    )
-
-    # Conversations: 1 of meer gesprekken per user
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS conversations (
-            id SERIAL PRIMARY KEY,
-            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-            started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            last_message_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            title TEXT
-        );
-        """
-    )
-
-    # Messages: alle losse berichten
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS messages (
-            id SERIAL PRIMARY KEY,
-            conversation_id INTEGER NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
-            role TEXT NOT NULL,
-            content TEXT NOT NULL,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        );
-        """
-    )
-
-    # Auth users: aparte tabel voor geregistreerde accounts
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS auth_users (
-            id SERIAL PRIMARY KEY,
-            email TEXT UNIQUE NOT NULL,
-            password_hash TEXT NOT NULL,
-            first_name TEXT NOT NULL,
-            last_name TEXT NOT NULL,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            last_login TIMESTAMPTZ
-        );
-        """
-    )
-
-    # User sessions voor ingelogde gebruikers
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS user_sessions (
-            session_id TEXT PRIMARY KEY,
-            user_id INTEGER NOT NULL REFERENCES auth_users(id) ON DELETE CASCADE,
-            expires_at TIMESTAMPTZ NOT NULL
-        );
-        """
-    )
-
-    conn.commit()
-    conn.close()
 
 @app.on_event("startup")
 def on_startup():
@@ -1033,12 +909,6 @@ def detect_hints(question: str):
         "user_type_hint": user
     }
 
-
-
-
-
-
-
 # =============================================================
 # X. PERFORMANCE STATUS CHECK
 # =============================================================
@@ -1056,118 +926,20 @@ def detect_cold_start(sql_ms, kb_ms, ai_ms, total_ms):
         return "⏱️ Slow total"
     return "✓ warm"
 
-
-
+    
+# =============================================================
+# 🖼 IMAGE
+# =============================================================
+# if is_image_request(question):
+#     return handle_image_intent(session_id, question)
 
 # =============================================================
-# MAIN ASK ENDPOINT
+# 🔍 SEARCH
 # =============================================================
+# Search-logica zit NU in ask_handler.py
+# main.py doet hier niets meer mee
+# (hooguit intent normaliseren)
 
-
-@app.post("/ask")
-async def ask(request: Request):
-    payload = await request.json()
-
-    question = payload.get("question")
-    session_id = payload.get("session_id")
-    language = payload.get("language", "nl")
-
-    # -----------------------------
-    # AUTH
-    # -----------------------------
-    conn = get_db_conn()
-    user = get_auth_user_from_session(conn, session_id)
-    conn.close()
-
-    intent = detect_intent(question)
-
-    # 🕒 TIJDVRAGEN — DIRECT NA INTENT
-    TIME_KEYWORDS = [
-        "vandaag",
-        "welke dag is het",
-        "wat voor dag is het",
-        "laatste jaarwisseling",
-        "afgelopen jaarwisseling",
-    ]
-
-    is_time_question = any(k in question.lower() for k in TIME_KEYWORDS)
-
-    if is_time_question:
-        answer = f"Vandaag is het {TIME_CONTEXT.today_string()}."
-        store_message_pair(session_id, question, answer)
-        return {
-            "type": "text",
-            "answer": answer
-        }
-
-    
-
-    
-    # =============================================================
-    # 🖼 IMAGE
-    # =============================================================
-    if intent == "image":
-        return handle_image_intent(session_id, question)
-
-        # if not image_url:
-        #     answer = "⚠️ Afbeelding genereren mislukt."
-        #     store_message_pair(session_id, question, answer)
-        #     return {"type": "error", "answer": answer}
-
-        # store_message_pair(session_id, question, f"[IMAGE]{image_url}")
-        # return {"type": "image", "url": image_url}
-
-
-        
-    # =============================================================
-    # 🔍 SEARCH
-    # =============================================================
-    if intent == "search":
-        intent = "text"
-
-    # -----------------------------
-    # 💬 TEXT
-    # -----------------------------
-    conn = get_db_conn()
-    _, history = get_history_for_model(conn, session_id)
-    conn.close()
-
-    from search.web_context import build_web_context
-
-    web_results = run_websearch_internal(question)
-    web_context = build_web_context(web_results)
-
-    hints = {
-       "time_context": time_context,
-        "web_context": web_context
-    }
-    
-    # hints["time_hint"] = build_llm_time_hint()
-
-    if user and user.get("first_name"):
-        hints["user_name"] = user["first_name"]
-
-    final_answer, _ = call_yellowmind_llm(
-        question=question,
-        language=language,
-        kb_answer=None,
-        sql_match=None,
-        hints=hints,
-        history=history
-    )
-
-    if not final_answer:
-        final_answer = "⚠️ Ik kreeg geen inhoudelijk antwoord terug, maar de chat werkt wel 🙂"
-
-    store_message_pair(session_id, question, final_answer)
-
-    return {
-        "type": "text",
-        "answer": final_answer
-    }
-
-
-
-
-   
+# if intent == "search":
+#     intent = "text"
 

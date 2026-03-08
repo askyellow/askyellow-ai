@@ -59,4 +59,4 @@ def build_system_prompt() -> str:
     return system_prompt.strip()
 
 SYSTEM_PROMPT = build_system_prompt()
-#KNOWLEDGE_ENTRIES = load_knowledge()
+KNOWLEDGE_ENTRIES = load_knowledge()
