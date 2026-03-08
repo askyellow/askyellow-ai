@@ -1,4 +1,5 @@
 import base64
+from email import message
 
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 from chat_engine.db import get_conn
@@ -121,8 +122,7 @@ async def chat_with_uploaded_image(
     original_image_data_url = (
         f"data:{mime_type};base64,{base64.b64encode(image_bytes).decode('utf-8')}"
     )
-    user_log_text = f"[USER_IMAGE]{original_image_data_url}"
-
+    user_log_text = f"[USER_IMAGE]{message or 'uploaded image'}"
     conn = get_conn()
     history = get_history_for_llm(conn, session_id)
     conn.close()
