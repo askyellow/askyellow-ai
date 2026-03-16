@@ -58,10 +58,17 @@ def call_yellowmind_llm(
     })
 
     if hints and hints.get("web_context"):
-        messages.append({
+       messages.append({
             "role": "system",
-            "content": hints["web_context"]
+            "content": (
+                "ACTUELE WEBINFORMATIE\n"
+                "--------------------\n"
+                f"{hints['web_context']}\n\n"
+                "Gebruik deze informatie als primaire bron voor recente feiten. "
+                "Als deze informatie afwijkt van je eigen kennis, vertrouw dan op de webinformatie."
+            )
         })
+       
 # Conversatiegeschiedenis (LLM-context)
     if history:
         for msg in history:
