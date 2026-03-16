@@ -1,5 +1,6 @@
 import base64
-from email import message
+import os
+import requests
 
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 from chat_engine.db import get_conn
@@ -24,6 +25,95 @@ from image_shared import (
 )
 
 from llm import call_yellowmind_llm
+
+SERPER_API_KEY = os.getenv("SERPER_API_KEY")
+
+
+def is_current_events_question(text: str) -> bool:
+    q = (text or "").lower().strip()
+
+    triggers = [
+        "nu",
+        "vandaag",
+        "momenteel",
+        "laatste",
+        "recent",
+        "actueel",
+        "actualiteit",
+        "actualiteiten",
+        "nieuws",
+        "update",
+        "ontwikkelingen",
+        "wat gebeurt er",
+        "wat speelt er",
+        "oorlog",
+        "iran",
+        "israël",
+        "midden-oosten",
+        "gaza",
+        "oekraine",
+        "ukraine",
+        "president",
+        "verkiezingen",
+    ]
+
+    return any(t in q for t in triggers)
+
+
+def run_websearch_internal(query: str) -> list:
+    if not query or not SERPER_API_KEY:
+        return []
+
+    url = "https://google.serper.dev/search"
+    headers = {
+        "X-API-KEY": SERPER_API_KEY,
+        "Content-Type": "application/json",
+    }
+    body = {"q": query}
+
+    try:
+        r = requests.post(url, json=body, headers=headers, timeout=10)
+        data = r.json()
+    except Exception as e:
+        print("⚠️ Internal websearch error:", e)
+        return []
+
+    results = []
+    for item in data.get("organic", [])[:5]:
+        results.append({
+            "title": item.get("title"),
+            "snippet": item.get("snippet"),
+            "url": item.get("link"),
+        })
+
+    return results
+
+
+def build_web_context(results: list) -> str:
+    if not results:
+        return ""
+
+    lines = [
+        "Actuele webcontext:",
+    ]
+
+    for i, item in enumerate(results, start=1):
+        title = item.get("title") or "Geen titel"
+        snippet = item.get("snippet") or ""
+        url = item.get("url") or ""
+        lines.append(f"{i}. {title}")
+        if snippet:
+            lines.append(f"   Samenvatting: {snippet}")
+        if url:
+            lines.append(f"   URL: {url}")
+
+    lines.append(
+        "Gebruik deze actuele webcontext als primaire bron voor recente feiten. "
+        "Als de context onzeker of onvolledig is, zeg dat expliciet."
+    )
+
+    return "\n".join(lines)
+
 
 router = APIRouter()
 
@@ -77,6 +167,12 @@ def chat(payload: dict):
 
     hints = {}
 
+    if is_current_events_question(message):
+        web_results = run_websearch_internal(message)
+        web_context = build_web_context(web_results)
+        if web_context:
+            hints["web_context"] = web_context
+            
     if wants_image:
         image_url = generate_image(message)
 
@@ -118,14 +214,17 @@ async def chat_with_uploaded_image(
 
     image_bytes, mime_type = await read_and_validate_upload(file)
 
+    # ✅ originele upload opslaan als renderbare data-url in chat history
+    original_image_data_url = (
+        f"data:{mime_type};base64,{base64.b64encode(image_bytes).decode('utf-8')}"
+    )
+    user_log_text = f"[USER_IMAGE]{original_image_data_url}"
+
     conn = get_conn()
     history = get_history_for_llm(conn, session_id)
     conn.close()
 
     operation = detect_uploaded_image_operation(message)
-
-    # ✅ veilige, korte logregel terug
-    user_log_text = f"[USER_IMAGE]{message or 'uploaded image'}"
 
     if operation == "edit":
         prompt = (message or "").strip()
