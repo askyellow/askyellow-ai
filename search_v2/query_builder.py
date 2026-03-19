@@ -227,6 +227,9 @@ Geef nu ALLEEN geldig JSON dat exact voldoet aan het schema en de regels. Geen e
         try:
             parsed = _safe_json_loads(raw)
             normalized = _normalize_decision(parsed)
+            print("RAW MODEL OUTPUT:", raw)
+            print("PARSED MODEL OUTPUT:", parsed)
+            print("NORMALIZED OUTPUT:", normalized)
             return normalized
         except Exception as e:
             last_err = str(e)
