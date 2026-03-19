@@ -86,10 +86,11 @@ async def analyze_v2(data: dict):
         decision["response_mode"] == "search"
         and decision["is_ready_to_search"] is True
         and refinement_depth < required
+        and decision["confidence"] < 0.85
     ):
         decision["is_ready_to_search"] = False
         decision["clarification_question"] = ai_generate_refinement_question(state)
-        
+        decision["proposed_query"] = None
     
     # 4️⃣ Nog niet klaar → vraag stellen
     if not decision["is_ready_to_search"]:
