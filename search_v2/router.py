@@ -82,9 +82,14 @@ async def analyze_v2(data: dict):
 
     required = MIN_REFINEMENTS.get(category, 1)
 
-    if decision["response_mode"] == "search" and refinement_depth < required:
-        decision["response_mode"] = "ask"
+    if (
+        decision["response_mode"] == "search"
+        and decision["is_ready_to_search"] is True
+        and refinement_depth < required
+    ):
+        decision["is_ready_to_search"] = False
         decision["clarification_question"] = ai_generate_refinement_question(state)
+        
     
     # 4️⃣ Nog niet klaar → vraag stellen
     if not decision["is_ready_to_search"]:
