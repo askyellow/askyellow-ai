@@ -1,7 +1,7 @@
 import base64
 from email import message
 
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Query
 from chat_engine.db import get_conn
 
 from chat_shared import (
@@ -24,8 +24,6 @@ from image_shared import (
 )
 
 from llm import call_yellowmind_llm
-
-router = APIRouter()
 
 router = APIRouter()
 
