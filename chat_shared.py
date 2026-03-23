@@ -329,7 +329,7 @@ def get_history_for_llm(conn, session_id: str, limit=30):
 
     return cleaned
 
-def get_user_images(conn, user_id: int, limit: int = 50):
+def get_user_images(conn, user_id: int, limit: int = 20):
     cur = conn.cursor()
     cur.execute(
         """
@@ -337,13 +337,12 @@ def get_user_images(conn, user_id: int, limit: int = 50):
         FROM conversations c
         JOIN messages m ON m.conversation_id = c.id
         WHERE c.user_id = %s
-          AND (
-            m.content LIKE '[USER_IMAGE]http%%'
-            OR m.content LIKE '[USER_IMAGE]https%%'
-          )
+          AND m.content LIKE '[USER_IMAGE]%%'
         ORDER BY m.created_at DESC
         LIMIT %s
         """,
         (user_id, limit)
     )
-    return cur.fetchall()
+    rows = cur.fetchall()
+    print("DEBUG get_user_images rows:", rows)
+    return rows
