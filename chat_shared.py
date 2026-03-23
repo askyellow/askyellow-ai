@@ -77,18 +77,23 @@ def create_new_conversation(conn, session_id: str) -> int:
     return conv_id
 
 
+from datetime import date
+
 def get_user_history(conn, user_id: int, day: str | None = None, limit=50):
     cur = conn.cursor()
-
     today = get_logical_date()
 
     if day == "today":
-        date_filter = "conversation_date = %s"
+        date_filter = "c.conversation_date = %s"
         params = [user_id, today]
 
     elif day == "yesterday":
-        date_filter = "conversation_date = %s"
+        date_filter = "c.conversation_date = %s"
         params = [user_id, today - timedelta(days=1)]
+
+    elif day:
+        date_filter = "c.conversation_date = %s"
+        params = [user_id, day]
 
     else:
         date_filter = "1=1"
@@ -97,6 +102,7 @@ def get_user_history(conn, user_id: int, day: str | None = None, limit=50):
     cur.execute(
         f"""
         SELECT c.id AS conversation_id,
+               c.conversation_date,
                m.role,
                m.content,
                m.created_at
@@ -111,6 +117,19 @@ def get_user_history(conn, user_id: int, day: str | None = None, limit=50):
     )
 
     return cur.fetchall()
+
+def get_available_history_days(conn, user_id: int, limit=30):
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT DISTINCT conversation_date
+        FROM conversations
+        WHERE user_id = %s
+          AND conversation_date IS NOT NULL
+        ORDER BY conversation_date DESC
+        LIMIT %s
+    """, (user_id, limit))
+    rows = cur.fetchall()
+    return [str(r["conversation_date"]) for r in rows]
 
 
 def get_or_create_daily_conversation(conn, user_id: int) -> int:
