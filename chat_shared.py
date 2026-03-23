@@ -344,5 +344,5 @@ def get_user_images(conn, user_id: int, limit: int = 20):
         (user_id, limit)
     )
     rows = cur.fetchall()
-    print("DEBUG get_user_images rows:", rows)
+    # print("DEBUG get_user_images rows:", rows)
     return rows
