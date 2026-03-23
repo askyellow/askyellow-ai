@@ -56,6 +56,13 @@ def chat_history(session_id: str, day: str | None = Query(default=None)):
             return {
                 "available_days": get_available_history_days(conn, user_id)
             }
+        
+        if day == "images":
+            images = get_user_images(conn, user_id)
+            return {
+                "images": images
+            }
+
 
         # 2) Specifieke dag ophalen
         if day and day not in ("today", "yesterday"):
