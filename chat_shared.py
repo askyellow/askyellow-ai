@@ -337,7 +337,10 @@ def get_user_images(conn, user_id: int, limit: int = 50):
         FROM conversations c
         JOIN messages m ON m.conversation_id = c.id
         WHERE c.user_id = %s
-          AND m.content LIKE '[USER_IMAGE]%%'
+          AND (
+            m.content LIKE '[USER_IMAGE]http%%'
+            OR m.content LIKE '[USER_IMAGE]https%%'
+          )
         ORDER BY m.created_at DESC
         LIMIT %s
         """,
