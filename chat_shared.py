@@ -131,6 +131,25 @@ def get_available_history_days(conn, user_id: int, limit=30):
     rows = cur.fetchall()
     return [str(r["conversation_date"]) for r in rows]
 
+def get_user_history_by_day(conn, user_id: int, day: str, limit: int = 200):
+    cur = conn.cursor()
+    cur.execute(
+        """
+        SELECT c.id AS conversation_id,
+               c.conversation_date,
+               m.role,
+               m.content,
+               m.created_at
+        FROM conversations c
+        JOIN messages m ON m.conversation_id = c.id
+        WHERE c.user_id = %s
+          AND c.conversation_date = %s
+        ORDER BY m.created_at ASC
+        LIMIT %s
+        """,
+        (user_id, day, limit)
+    )
+    return cur.fetchall()
 
 def get_or_create_daily_conversation(conn, user_id: int) -> int:
     today = get_logical_date()

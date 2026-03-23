@@ -1,6 +1,5 @@
 import base64
-import os
-import requests
+from email import message
 
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 from chat_engine.db import get_conn
@@ -26,232 +25,97 @@ from image_shared import (
 
 from llm import call_yellowmind_llm
 
-SERPER_API_KEY = os.getenv("SERPER_API_KEY")
-
-def route_intent(question: str) -> str:
-    router_question = f"""
-Classificeer de volgende gebruikersvraag voor YellowMind.
-
-Kies exact één label:
-- CHAT = gewone vraag of gesprek
-- SEARCH = actuele informatie, nieuws, recente feiten, live status, webinformatie nodig
-- IMAGE = gebruiker wil een afbeelding genereren
-
-Gebruikersvraag:
-{question}
-
-Antwoord exact met één woord:
-CHAT
-SEARCH
-IMAGE
-""".strip()
-
-    answer, _ = call_yellowmind_llm(
-        question=router_question,
-        language="nl",
-        kb_answer=None,
-        sql_match=None,
-        hints={},
-        history=[]
-    )
-
-    label = (answer or "").strip().upper()
-
-    # 🔒 hard normalize / airbag
-    if "SEARCH" in label:
-        return "SEARCH"
-    if "IMAGE" in label:
-        return "IMAGE"
-    if "CHAT" in label:
-        return "CHAT"
-
-    # fallback regels als model iets geks teruggeeft
-    q = (question or "").lower()
-
-    image_words = [
-        "maak een afbeelding",
-        "genereer een afbeelding",
-        "afbeelding van",
-        "plaatje van",
-        "teken",
-        "illustratie",
-        "logo",
-        "avatar",
-        "banner",
-    ]
-    if any(w in q for w in image_words):
-        return "IMAGE"
-
-    search_words = [
-        "nu",
-        "vandaag",
-        "recent",
-        "laatste",
-        "nieuws",
-        "actueel",
-        "momenteel",
-        "update",
-    ]
-    if any(w in q for w in search_words):
-        return "SEARCH"
-
-    return "CHAT"
-
-def is_current_events_question(text: str) -> bool:
-    q = (text or "").lower().strip()
-
-    triggers = [
-        "nu",
-        "vandaag",
-        "momenteel",
-        "laatste",
-        "recent",
-        "actueel",
-        "actualiteit",
-        "actualiteiten",
-        "nieuws",
-        "update",
-        "ontwikkelingen",
-        "wat gebeurt er",
-        "wat speelt er",
-        "oorlog",
-        "iran",
-        "israël",
-        "midden-oosten",
-        "gaza",
-        "oekraine",
-        "ukraine",
-        "president",
-        "verkiezingen",
-    ]
-
-    return any(t in q for t in triggers)
-
-
-def run_websearch_internal(query: str) -> list:
-    if not query or not SERPER_API_KEY:
-        return []
-
-    url = "https://google.serper.dev/search"
-    headers = {
-        "X-API-KEY": SERPER_API_KEY,
-        "Content-Type": "application/json",
-    }
-    body = {"q": query}
-
-    try:
-        r = requests.post(url, json=body, headers=headers, timeout=10)
-        data = r.json()
-    except Exception as e:
-        print("⚠️ Internal websearch error:", e)
-        return []
-
-    results = []
-    for item in data.get("organic", [])[:5]:
-        results.append({
-            "title": item.get("title"),
-            "snippet": item.get("snippet"),
-            "url": item.get("link"),
-        })
-
-    return results
-
-
-def build_web_context(results: list) -> str:
-    if not results:
-        return ""
-
-    lines = [
-        "Actuele webcontext:",
-    ]
-
-    for i, item in enumerate(results, start=1):
-        title = item.get("title") or "Geen titel"
-        snippet = item.get("snippet") or ""
-        url = item.get("url") or ""
-        lines.append(f"{i}. {title}")
-        if snippet:
-            lines.append(f"   Samenvatting: {snippet}")
-        if url:
-            lines.append(f"   URL: {url}")
-
-    lines.append(
-        "Gebruik deze actuele webcontext als primaire bron voor recente feiten. "
-        "Als de context onzeker of onvolledig is, zeg dat expliciet."
-    )
-
-    return "\n".join(lines)
-
-def should_search(question: str) -> bool:
-    router_prompt = f"""
-Bepaal of de volgende vraag actuele of externe informatie nodig heeft.
-
-Vraag:
-{question}
-
-Antwoord alleen met:
-SEARCH
-of
-CHAT
-"""
-
-    try:
-        result, _ = call_yellowmind_llm(
-            session_id="router",
-            user_message=router_prompt,
-            history=[],
-            hints=None
-        )
-
-        result = result.strip().upper()
-
-        return "SEARCH" in result
-
-    except Exception as e:
-        print("router error:", e)
-        return False
+router = APIRouter()
 
 router = APIRouter()
 
-
 @router.get("/chat/history")
-def chat_history(session_id: str):
+def chat_history(session_id: str, day: str | None = Query(default=None)):
     conn = get_conn()
-    welcome_message = None
+    try:
+        user = get_auth_user_from_session(conn, session_id)
 
-    user = get_auth_user_from_session(conn, session_id)
+        # Gast: geen opgeslagen geschiedenis
+        if not user:
+            return {
+                "available_days": [],
+                "messages": [],
+                "today": [],
+                "yesterday": [],
+                "welcome": None,
+            }
 
-    if user:
         user_id = user["id"]
+        first_name = user.get("first_name")
 
-        active_conversation_id = get_or_create_daily_conversation(conn, user_id)
+        # 1) Alleen lijst met beschikbare datums ophalen
+        if day == "list":
+            return {
+                "available_days": get_available_history_days(conn, user_id)
+            }
 
-        today_history = get_user_history(conn, user_id, day="today")
-        yesterday_history = get_user_history(conn, user_id, day="yesterday")
+        # 2) Specifieke dag ophalen
+        if day and day not in ("today", "yesterday"):
+            messages = get_user_history_by_day(conn, user_id, day)
+            return {
+                "day": day,
+                "messages": messages,
+                "available_days": get_available_history_days(conn, user_id),
+            }
 
-        if not today_history:
-            welcome_message = build_welcome_message(user.get("first_name"))
+        # 3) Bestaande today/yesterday gedrag behouden
+        today_messages = get_user_history(conn, user_id, "today")
+        yesterday_messages = get_user_history(conn, user_id, "yesterday")
 
-    else:
-        active_conversation_id = get_active_conversation(conn, session_id)
-        _, today_history = get_history_for_model(conn, session_id, day="today")
-        _, yesterday_history = get_history_for_model(conn, session_id, day="yesterday")
-        welcome_message = build_welcome_message(None)
+        return {
+            "available_days": get_available_history_days(conn, user_id),
+            "today": today_messages,
+            "yesterday": yesterday_messages,
+            "welcome": build_welcome_message(first_name),
+        }
 
-    conn.close()
+    finally:
+        conn.close()
 
-    return {
-        "active_conversation_id": active_conversation_id,
-        "today": today_history,
-        "yesterday": yesterday_history,
-        "welcome": welcome_message,
-    }
+# @router.get("/chat/history")
+# def chat_history(session_id: str):
+#     conn = get_conn()
+#     welcome_message = None
+
+#     user = get_auth_user_from_session(conn, session_id)
+
+#     if user:
+#         user_id = user["id"]
+
+#         active_conversation_id = get_or_create_daily_conversation(conn, user_id)
+
+#         today_history = get_user_history(conn, user_id, day="today")
+#         yesterday_history = get_user_history(conn, user_id, day="yesterday")
+
+#         if not today_history:
+#             welcome_message = build_welcome_message(user.get("first_name"))
+
+#     else:
+#         active_conversation_id = get_active_conversation(conn, session_id)
+#         _, today_history = get_history_for_model(conn, session_id, day="today")
+#         _, yesterday_history = get_history_for_model(conn, session_id, day="yesterday")
+#         welcome_message = build_welcome_message(None)
+
+#     conn.close()
+
+#     return {
+#         "active_conversation_id": active_conversation_id,
+#         "today": today_history,
+#         "yesterday": yesterday_history,
+#         "welcome": welcome_message,
+#     }
 
 
 @router.post("/chat")
 def chat(payload: dict):
     session_id = payload.get("session_id")
     message = payload.get("message", "").strip()
+    wants_image = payload.get("wants_image", False)
 
     if not session_id or not message:
         raise HTTPException(status_code=400, detail="session_id of message ontbreekt")
@@ -261,10 +125,8 @@ def chat(payload: dict):
     conn.close()
 
     hints = {}
-    route = route_intent(message)
 
-    # 1. IMAGE → nieuwe afbeelding genereren
-    if route == "IMAGE":
+    if wants_image:
         image_url = generate_image(message)
 
         if not image_url:
@@ -277,15 +139,6 @@ def chat(payload: dict):
             "url": image_url
         }
 
-    # 2. SEARCH → actuele webcontext ophalen
-    if route == "SEARCH":
-        web_results = run_websearch_internal(message)
-        web_context = build_web_context(web_results)
-
-        if web_context:
-            hints["web_context"] = web_context
-
-    # 3. gewone chat
     answer, _ = call_yellowmind_llm(
         question=message,
         language="nl",
@@ -302,6 +155,7 @@ def chat(payload: dict):
 
     return {"reply": answer}
 
+
 @router.post("/chat/image")
 async def chat_with_uploaded_image(
     session_id: str = Form(...),
@@ -313,17 +167,14 @@ async def chat_with_uploaded_image(
 
     image_bytes, mime_type = await read_and_validate_upload(file)
 
-    # ✅ originele upload opslaan als renderbare data-url in chat history
-    original_image_data_url = (
-        f"data:{mime_type};base64,{base64.b64encode(image_bytes).decode('utf-8')}"
-    )
-    user_log_text = f"[USER_IMAGE]{original_image_data_url}"
-
     conn = get_conn()
     history = get_history_for_llm(conn, session_id)
     conn.close()
 
     operation = detect_uploaded_image_operation(message)
+
+    # ✅ veilige, korte logregel terug
+    user_log_text = f"[USER_IMAGE]{message or 'uploaded image'}"
 
     if operation == "edit":
         prompt = (message or "").strip()
