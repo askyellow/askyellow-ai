@@ -328,3 +328,19 @@ def get_history_for_llm(conn, session_id: str, limit=30):
         })
 
     return cleaned
+
+def get_user_images(conn, user_id: int, limit: int = 50):
+    cur = conn.cursor()
+    cur.execute(
+        """
+        SELECT m.content, m.created_at
+        FROM conversations c
+        JOIN messages m ON m.conversation_id = c.id
+        WHERE c.user_id = %s
+          AND m.content LIKE '[USER_IMAGE]%%'
+        ORDER BY m.created_at DESC
+        LIMIT %s
+        """,
+        (user_id, limit)
+    )
+    return cur.fetchall()

@@ -16,6 +16,8 @@ from chat_shared import (
     get_available_history_days,
     get_user_history_by_day,
     build_welcome_message,
+    get_user_images,
+    create_new_conversation,        
 )
 
 from image_shared import (
@@ -62,6 +64,12 @@ def chat_history(session_id: str, day: str | None = Query(default=None)):
                 "day": day,
                 "messages": messages,
                 "available_days": get_available_history_days(conn, user_id),
+            }
+        
+        if day == "images":
+            images = get_user_images(conn, user_id)
+            return {
+                "images": images
             }
 
         # 3) Bestaande today/yesterday gedrag behouden
