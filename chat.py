@@ -13,6 +13,9 @@ from chat_shared import (
     get_auth_user_from_session,
     build_welcome_message,
     get_history_for_llm,
+    get_available_history_days,
+    get_user_history_by_day,
+    build_welcome_message,
 )
 
 from image_shared import (
