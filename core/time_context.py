@@ -1,14 +1,19 @@
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
 def build_time_context() -> str:
     now = datetime.now(ZoneInfo("Europe/Amsterdam"))
     return (
-        f"Huidige datum: {now.strftime('%d %B %Y')}. "
-        f"De meest recente jaarwisseling vond plaats op "
-        f"31 december {now.year - 1}. "
-        "Relatieve termen zoals 'afgelopen jaarwisseling', "
-        "'recent' en 'vorig jaar' verwijzen naar deze context."
+        f"Vandaag is het {now.strftime('%d %B %Y')} (Europe/Amsterdam). "
+        "Deze tijdsinformatie is actueel, zeker en leidend. "
+        "Behandel deze datum als feit. "
+        "Zeg nooit dat je de huidige datum, tijd of actualiteit niet weet. "
+        "Relatieve termen zoals 'vandaag', 'gisteren', 'morgen', "
+        "'vorig jaar', 'dit jaar', 'recent' en 'afgelopen jaarwisseling' "
+        "moeten vanuit deze datum worden geïnterpreteerd."
     )
 def day_part() -> str:
     hour = datetime.now(ZoneInfo("Europe/Amsterdam")).hour
@@ -25,11 +30,16 @@ def greeting() -> str:
 def build_llm_time_hint() -> str:
     now = datetime.now(ZoneInfo("Europe/Amsterdam"))
     if now.hour < 12:
-        return "Het is ochtend."
+        dagdeel = "ochtend"
     elif now.hour < 18:
-        return "Het is middag."
+        dagdeel = "middag"
     else:
-        return "Het is avond."
+        dagdeel = "avond"
+
+    return (
+        f"Het is nu {dagdeel}. "
+        "Gebruik dit dagdeel natuurlijk in toon of begroeting als dat relevant is."
+    )
 
 def get_logical_date():
     return datetime.now(ZoneInfo("Europe/Amsterdam")).date()
