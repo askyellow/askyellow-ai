@@ -1,9 +1,9 @@
 from pyexpat.errors import messages
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response, JSONResponse
+from fastapi.responses import Response, JSONResponse, RedirectResponse
 from dotenv import load_dotenv
 from openai import OpenAI
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, Request, HTTPException, Query 
 from core.time import TimeContext
 from core.time_context import build_time_context
 from llm import call_yellowmind_llm
@@ -64,6 +64,116 @@ pwd_context = CryptContext(
 )
 
 resend.api_key = os.getenv("RESEND_API_KEY")
+
+# begin account met verrificatie + wachtwoord reset
+
+FRONTEND_BASE_URL = os.getenv("FRONTEND_BASE_URL", "https://askyellow.eu/test").rstrip("/")
+MAIL_FROM = os.getenv("MAIL_FROM", "AskYellow <no-reply@askyellow.nl>")
+SESSION_TTL_DAYS = int(os.getenv("SESSION_TTL_DAYS", "30"))
+VERIFY_TOKEN_TTL_HOURS = int(os.getenv("VERIFY_TOKEN_TTL_HOURS", "24"))
+RESET_TOKEN_TTL_MINUTES = int(os.getenv("RESET_TOKEN_TTL_MINUTES", "30"))
+
+
+def generate_token() -> str:
+    return secrets.token_urlsafe(32)
+
+
+def get_session_expiry():
+    return datetime.now(timezone.utc) + timedelta(days=SESSION_TTL_DAYS)
+
+
+def send_verification_email(to_email: str, first_name: str, token: str):
+    verify_link = f"{FRONTEND_BASE_URL}/verify.html?token={token}"
+
+    try:
+        resend.Emails.send({
+            "from": MAIL_FROM,
+            "to": to_email,
+            "subject": "Bevestig je e-mailadres voor AskYellow",
+            "html": f"""
+                <p>Hoi {first_name},</p>
+
+                <p>Bedankt voor je registratie bij AskYellow.</p>
+
+                <p>Klik op onderstaande knop om je e-mailadres te bevestigen:</p>
+
+                <p>
+                  <a href="{verify_link}" style="display:inline-block;padding:12px 18px;background:#FFD700;color:#111;text-decoration:none;border-radius:8px;font-weight:700;">
+                    Email bevestigen
+                  </a>
+                </p>
+
+                <p>Of gebruik deze link:</p>
+                <p><a href="{verify_link}">{verify_link}</a></p>
+
+                <p>Deze link is <strong>{VERIFY_TOKEN_TTL_HOURS} uur geldig</strong>.</p>
+
+                <p>Groet,<br>YellowMind</p>
+            """
+        })
+    except Exception as e:
+        print("❌ MAIL FAILED — VERIFY LINK:", verify_link)
+        print(e)
+
+
+def send_password_reset_email(to_email: str, token: str):
+    reset_link = f"{FRONTEND_BASE_URL}/reset.html?token={token}"
+
+    try:
+        resend.Emails.send({
+            "from": MAIL_FROM,
+            "to": to_email,
+            "subject": "Reset je wachtwoord voor AskYellow",
+            "html": f"""
+                <p>Hoi,</p>
+
+                <p>Via onderstaande link kun je een nieuw wachtwoord instellen:</p>
+
+                <p>
+                  <a href="{reset_link}" style="display:inline-block;padding:12px 18px;background:#FFD700;color:#111;text-decoration:none;border-radius:8px;font-weight:700;">
+                    Reset je wachtwoord
+                  </a>
+                </p>
+
+                <p>Of gebruik deze link:</p>
+                <p><a href="{reset_link}">{reset_link}</a></p>
+
+                <p>Deze link is <strong>{RESET_TOKEN_TTL_MINUTES} minuten geldig</strong>.</p>
+
+                <p>Groet,<br>YellowMind</p>
+            """
+        })
+    except Exception as e:
+        print("❌ MAIL FAILED — RESET LINK:", reset_link)
+        print(e)
+
+
+def get_user_by_session(conn, session_id: str):
+    if not session_id:
+        return None
+
+    cur = conn.cursor()
+    cur.execute(
+        """
+        SELECT
+            au.id,
+            au.email,
+            au.first_name,
+            au.last_name,
+            au.created_at,
+            au.last_login,
+            au.email_verified,
+            au.email_verified_at,
+            au.account_role,
+            au.subscription_status
+        FROM user_sessions us
+        JOIN auth_users au ON au.id = us.user_id
+        WHERE us.session_id = %s
+          AND us.expires_at > NOW()
+        """,
+        (session_id,)
+    )
+    return cur.fetchone()
 
 def normalize_password(password: str) -> str:
     if not password:
@@ -577,17 +687,27 @@ async def login(payload: dict):
     conn = get_db_conn()
     cur = conn.cursor()
 
-    # gebruiker ophalen
     cur.execute(
-        "SELECT id, password_hash, first_name FROM auth_users WHERE email = %s",
+        """
+        SELECT id, password_hash, first_name, email_verified
+        FROM auth_users
+        WHERE email = %s
+        """,
         (email,)
     )
     user = cur.fetchone()
 
     if not user or not verify_password(password, user["password_hash"]):
+        conn.close()
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    # ✅ PRE-CHECK: bestaat session_id al en hoort die bij iemand anders?
+    if not user["email_verified"]:
+        conn.close()
+        raise HTTPException(
+            status_code=403,
+            detail="Emailadres nog niet geverifieerd. Controleer je mailbox."
+        )
+
     cur.execute(
         "SELECT user_id FROM user_sessions WHERE session_id = %s",
         (session_id,)
@@ -597,10 +717,10 @@ async def login(payload: dict):
         conn.close()
         raise HTTPException(
             status_code=409,
-            detail="session_id is al gekoppeld aan een andere user (mogelijk frontend bug of session reuse)"
+            detail="session_id is al gekoppeld aan een andere user"
         )
 
-    expires_at = datetime.now(timezone.utc) + timedelta(days=30)
+    expires_at = get_session_expiry()
 
     cur.execute(
         """
@@ -662,52 +782,166 @@ async def register(payload: dict):
     conn = get_db_conn()
     cur = conn.cursor()
 
-    # Bestaat email al?
     cur.execute(
-        "SELECT id FROM auth_users WHERE email = %s",
+        "SELECT id, email_verified FROM auth_users WHERE email = %s",
         (email,)
     )
-    if cur.fetchone():
+    existing = cur.fetchone()
+
+    if existing and existing["email_verified"]:
         conn.close()
         raise HTTPException(status_code=409, detail="Email bestaat al")
 
-    # Wachtwoord veilig opslaan
     safe_password = normalize_password(password)
     password_hash = pwd_context.hash(safe_password)
 
-    # 1️⃣ User aanmaken
-    cur.execute(
-        """
-        INSERT INTO auth_users (email, password_hash, first_name, last_name)
-        VALUES (%s, %s, %s, %s)
-        RETURNING id
-        """,
-        (email, password_hash, first_name, last_name)
+    verify_token = generate_token()
+    verify_expires = datetime.now(timezone.utc) + timedelta(hours=VERIFY_TOKEN_TTL_HOURS)
+
+    if existing:
+        cur.execute(
+            """
+            UPDATE auth_users
+            SET password_hash = %s,
+                first_name = %s,
+                last_name = %s,
+                verify_token = %s,
+                verify_expires = %s,
+                email_verified = FALSE,
+                email_verified_at = NULL
+            WHERE id = %s
+            RETURNING id
+            """,
+            (password_hash, first_name, last_name, verify_token, verify_expires, existing["id"])
+        )
+        user_id = cur.fetchone()["id"]
+    else:
+        cur.execute(
+            """
+            INSERT INTO auth_users (
+                email,
+                password_hash,
+                first_name,
+                last_name,
+                email_verified,
+                verify_token,
+                verify_expires
+            )
+            VALUES (%s, %s, %s, %s, FALSE, %s, %s)
+            RETURNING id
+            """,
+            (email, password_hash, first_name, last_name, verify_token, verify_expires)
+        )
+        user_id = cur.fetchone()["id"]
+
+    conn.commit()
+    conn.close()
+
+    send_verification_email(
+        to_email=email,
+        first_name=first_name,
+        token=verify_token
     )
-    user_id = cur.fetchone()["id"]
 
-    # 2️⃣ Session aanmaken (AUTO-LOGIN)
-    session_id = str(uuid.uuid4())
-    expires_at = datetime.now(timezone.utc) + timedelta(days=30)
+    return {
+        "success": True,
+        "pending_verification": True,
+        "message": "Account aangemaakt. Controleer je e-mail om je account te bevestigen."
+    }
+
+@app.post("/auth/resend-verification")
+async def resend_verification(payload: dict):
+    email = (payload.get("email") or "").lower().strip()
+
+    if not email:
+        raise HTTPException(status_code=400, detail="Email is verplicht")
+
+    conn = get_db_conn()
+    cur = conn.cursor()
 
     cur.execute(
         """
-        INSERT INTO user_sessions (session_id, user_id, expires_at)
-        VALUES (%s, %s, %s)
+        SELECT id, first_name, email_verified
+        FROM auth_users
+        WHERE email = %s
         """,
-        (session_id, user_id, expires_at)
+        (email,)
+    )
+    user = cur.fetchone()
+
+    if user and not user["email_verified"]:
+        verify_token = generate_token()
+        verify_expires = datetime.now(timezone.utc) + timedelta(hours=VERIFY_TOKEN_TTL_HOURS)
+
+        cur.execute(
+            """
+            UPDATE auth_users
+            SET verify_token = %s,
+                verify_expires = %s
+            WHERE id = %s
+            """,
+            (verify_token, verify_expires, user["id"])
+        )
+        conn.commit()
+
+        send_verification_email(
+            to_email=email,
+            first_name=user["first_name"],
+            token=verify_token
+        )
+
+    conn.close()
+
+    return {
+        "success": True,
+        "message": "Als dit account bestaat en nog niet geverifieerd is, is er een nieuwe verificatielink verstuurd."
+    }
+
+
+@app.get("/auth/verify-email")
+async def verify_email(token: str = Query(...)):
+    conn = get_db_conn()
+    cur = conn.cursor()
+
+    cur.execute(
+        """
+        SELECT id
+        FROM auth_users
+        WHERE verify_token = %s
+          AND verify_expires > NOW()
+          AND email_verified = FALSE
+        """,
+        (token,)
+    )
+    user = cur.fetchone()
+
+    if not user:
+        conn.close()
+        return JSONResponse(
+            status_code=400,
+            content={
+                "success": False,
+                "message": "Ongeldige of verlopen verificatielink."
+            }
+        )
+
+    cur.execute(
+        """
+        UPDATE auth_users
+        SET email_verified = TRUE,
+            email_verified_at = NOW(),
+            verify_token = NULL,
+            verify_expires = NULL
+        WHERE id = %s
+        """,
+        (user["id"],)
     )
 
     conn.commit()
     conn.close()
 
-    # 3️⃣ Return = direct ingelogd
-    return {
-        "success": True,
-        "user_id": user_id,
-        "first_name": first_name,
-        "session_id": session_id
-    }
+    return {"success": True, "message": "Email succesvol geverifieerd."}
+
 
 @app.post("/auth/request-password-reset")
 async def request_password_reset(payload: dict):
@@ -723,8 +957,8 @@ async def request_password_reset(payload: dict):
     user = cur.fetchone()
 
     if user:
-        token = str(uuid.uuid4())
-        expires = datetime.utcnow() + timedelta(minutes=30)
+        token = generate_token()
+        expires = datetime.now(timezone.utc) + timedelta(minutes=RESET_TOKEN_TTL_MINUTES)
 
         cur.execute(
             """
@@ -737,43 +971,15 @@ async def request_password_reset(payload: dict):
         )
 
         conn.commit()
-
-        reset_link = f"https://askyellow.nl/reset.html?token={token}"
-
-        try:
-            resend.Emails.send({
-    "from": "AskYellow <no-reply@askyellow.nl>",
-    "to": email,
-    "subject": "Reset je wachtwoord voor AskYellow",
-    "html": f"""
-        <p>Hoi,</p>
-
-        <p>Via onderstaande link kun je een nieuw wachtwoord instellen:</p>
-
-        <p>
-          <a href="{reset_link}">
-            Reset je wachtwoord
-          </a>
-        </p>
-
-        <p>Deze link is <strong>30 minuten geldig</strong>.</p>
-
-        <p>Groet,<br>
-        YellowMind</p>
-    """
-})
-
-        except Exception as e:
-            # fallback: log link als mail faalt
-            print("❌ MAIL FAILED — RESET LINK:", reset_link)
-            print(e)
+        send_password_reset_email(to_email=email, token=token)
 
     conn.close()
 
-    # ⚠️ altijd hetzelfde antwoord (security)
     return {
         "message": "Als dit e-mailadres bestaat, ontvang je een reset-link."
     }
+
+
 @app.post("/auth/reset-password")
 async def reset_password(payload: dict):
     token = payload.get("token")
@@ -817,6 +1023,69 @@ async def reset_password(payload: dict):
     conn.close()
 
     return {"success": True}
+
+@app.get("/auth/me")
+async def auth_me(session_id: str):
+    conn = get_db_conn()
+    user = get_user_by_session(conn, session_id)
+    conn.close()
+
+    if not user:
+        raise HTTPException(status_code=401, detail="Niet ingelogd of sessie verlopen")
+
+    return {
+        "success": True,
+        "user": {
+            "id": user["id"],
+            "email": user["email"],
+            "first_name": user["first_name"],
+            "last_name": user["last_name"],
+            "created_at": user["created_at"].isoformat() if user.get("created_at") else None,
+            "last_login": user["last_login"].isoformat() if user.get("last_login") else None,
+            "email_verified": user["email_verified"],
+            "email_verified_at": user["email_verified_at"].isoformat() if user.get("email_verified_at") else None,
+            "account_role": user["account_role"],
+            "subscription_status": user["subscription_status"],
+        }
+    }
+
+
+@app.post("/auth/account/update")
+async def update_account(payload: dict):
+    session_id = payload.get("session_id")
+    first_name = (payload.get("first_name") or "").strip()
+    last_name = (payload.get("last_name") or "").strip()
+
+    if not session_id:
+        raise HTTPException(status_code=400, detail="session_id ontbreekt")
+
+    if not first_name or not last_name:
+        raise HTTPException(status_code=400, detail="Voornaam en achternaam zijn verplicht")
+
+    conn = get_db_conn()
+    user = get_user_by_session(conn, session_id)
+
+    if not user:
+        conn.close()
+        raise HTTPException(status_code=401, detail="Niet ingelogd of sessie verlopen")
+
+    cur = conn.cursor()
+    cur.execute(
+        """
+        UPDATE auth_users
+        SET first_name = %s,
+            last_name = %s
+        WHERE id = %s
+        """,
+        (first_name, last_name, user["id"])
+    )
+    conn.commit()
+    conn.close()
+
+    return {
+        "success": True,
+        "message": "Accountgegevens bijgewerkt."
+    }
 
 # =============================================================
 # 4. SQL KNOWLEDGE LAYER

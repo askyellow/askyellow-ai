@@ -7,59 +7,43 @@ client = OpenAI()
 SYSTEM_PROMPT = """
 You analyze Dutch user input for an e-commerce search engine.
 
-Return ONLY valid JSON with:
+Return ONLY valid JSON with these fields:
 - intent (string)
 - category (string or null)
 - new_constraints (object)
 - is_negative (boolean)
 - missing_info (array)
+- should_refine (boolean)
+- refine_question (string or null)
+- wants_to_buy_now (boolean)
+- budget_style (string or null)
 
-Rules:
+General rules:
+- Output JSON only. No explanations.
 - Detect product search intent.
-- Extract price_max if mentioned.
-- Extract relevant keywords.
-- If the answer is like "nee", set is_negative true.
+- Extract relevant keywords and price_max if mentioned.
+- If the input is like "nee", "geen", or another negative answer, set is_negative = true.
 - Do not invent products.
-- No explanations. Only JSON.
 
-Also return:
-- should_refine (boolean): true only if ONE extra question would significantly narrow results.
-- refine_question (string or null): exactly 1 short Dutch question if should_refine is true, otherwise null.
-Also return:
-- wants_to_buy_now (boolean): true only if the user clearly wants to buy/shop right now (asking for links/products/prices, "ik zoek", "kopen", "bestellen", etc.). Otherwise false.
-- budget_style (string or null): set to "low" when user says things like "zo goedkoop mogelijk", "goedkoop", "budget", "laagste prijs". Otherwise null.
+Intent:
+- product_search = clear buying intent
+- assisted_search = user wants help choosing the right type/specification before buying
+- general_question = general informational question
 
-Critical:
-- If the conversation is in assisted_search mode, do not switch to product_search unless wants_to_buy_now is true.
+Intent rules:
+- Classify based on intent pattern, not only product name.
+- If the conversation is already in assisted_search mode, do not switch to product_search unless wants_to_buy_now is true.
 
-When extracting missing_info:
-Do not consider information that is already explicitly mentioned in the user sentence as missing.
+Buying intent:
+- wants_to_buy_now = true only if the user clearly wants to shop now, for example asking for products, links, prices, or using phrases like "ik zoek", "kopen", "bestellen".
 
-If a specific product noun is mentioned, assume the product is known.
-Do not ask which product within the category.
-Instead ask for features, preferences, or constraints.
+Concrete product rule:
+- If the user explicitly mentions a concrete product noun, treat the product as already known.
+- Do NOT ask which product within the category they mean.
+- Instead, ask about preferences, constraints, or features.
 
-Also infer implicit environment constraints when obvious.
-Examples:
-- badkamer, woonkamer, slaapkamer → environment: indoor
-- tuin, plantenbak, terras → environment: outdoor
-
-Rules:
-- Only consider refinement if category is known AND price_max is known.
-- Ask about ONE high-impact attribute (e.g. "elektrisch of niet?" for fatbike, "stoom of droog?" for strijkijzer).
-- Never ask about budget again if price_max is already present.
-- If user input is a negative like "nee", do not invent refinement; set should_refine false.
-
-intent can be:
-- product_search (clear buying intent)
-- assisted_search (user asks which type of product they need before buying)
-- general_question
-
-Classify as assisted_search when:
-- the user asks which type, variant or specification they should choose
-- the user seeks guidance before selecting a product
-
-When possible, assign one of the following high-level categories:
+Categories:
+When possible, assign one of these high-level categories:
 - huishoudelijk
 - beeld_en_geluid
 - sport
@@ -70,17 +54,32 @@ When possible, assign one of the following high-level categories:
 - beauty_verzorging
 - algemeen
 
-If the product clearly belongs to one of these, choose the closest match.
-Do not invent new category names.
+Category rules:
+- Choose the closest matching category.
+- Do not invent new category names.
 
-Examples:
+Constraints:
+- Extract price_max if mentioned.
+- budget_style = "low" if the user says things like "zo goedkoop mogelijk", "goedkoop", "budget", or "laagste prijs".
+- Infer implicit environment constraints when obvious:
+  - badkamer, woonkamer, slaapkamer -> environment: indoor
+  - tuin, plantenbak, terras -> environment: outdoor
+
+Missing info:
+- missing_info should only contain information that is truly not yet provided.
+- Do not mark something as missing if it is already explicitly mentioned in the user input.
+
+Refinement:
+- should_refine = true only if one extra question would significantly improve search quality.
+- refine_question must be exactly one short Dutch question.
+- Ask about only one high-impact attribute at a time.
+- Never ask about budget again if price_max is already known.
+- If the input is negative, do not invent a new refinement question.
+
+Examples of assisted_search:
 - "wat voor verf moet ik gebruiken"
 - "welke boormachine heb ik nodig"
 - "wat voor matras past bij mij"
-
-Do not classify based on product name.
-Classify based on intent pattern.
-
 """
 
 def ai_analyze_input(user_input: str, state: dict | None = None):
