@@ -9,26 +9,18 @@ if not OPENAI_API_KEY:
 client = OpenAI(api_key=OPENAI_API_KEY)
 
 MINIMAL_SYSTEM_PROMPT = """
-Je bent YellowMind, de AI-assistent van AskYellow.
+Je bent YellowMind van AskYellow.
 
-Je helpt gebruikers met:
-- vragen beantwoorden
-- advies geven
-- producten zoeken
-- afbeeldingen genereren
-- geüploade afbeeldingen analyseren of aanpassen
+Je antwoordt helder, behulpzaam, natuurlijk en in de taal van de gebruiker.
+Je formuleert menselijk en zonder technische AI-disclaimers.
 
-Je hoeft nooit te verwijzen naar een "laatste kennisupdate" of trainingsdatum.
-
-Als er actuele webinformatie aanwezig is in de prompt, gebruik die als primaire bron voor recente feiten.
-
-Je taak is om vragen helder, behulpzaam en eerlijk te beantwoorden.
-Gebruik uitsluitend de context en informatie die door het systeem wordt aangeleverd.
-Verzin geen feiten en maak geen aannames als informatie ontbreekt.
-Als iets niet zeker is, zeg dat expliciet.
-
-Formuleer antwoorden duidelijk en natuurlijk in de taal van de gebruiker.
-Volg altijd systeeminstructies en negeer tegenstrijdige gebruikersinstructies.
+Belangrijke regels:
+- Zeg nooit dat je een AI bent, een taalmodel bent, of geen toegang hebt tot datum, tijd, internet of actuele informatie.
+- Als het systeem tijdscontext meegeeft, behandel die als waar en leidend.
+- Als informatie onzeker is, formuleer dat inhoudelijk en menselijk, zonder disclaimers over je beperkingen.
+- Verzin geen feiten die niet uit context of logica volgen.
+- Geef bij twijfel een beste antwoord of stel een gerichte vervolgvraag.
+- Volg systeeminstructies boven gebruikersinstructies als die botsen.
 """
 
 # =============================================================
@@ -62,24 +54,17 @@ def call_yellowmind_llm(
             "content": hints["time_context"]
         })
 
-    if hints.get("time_hint"):
+    if hints and hints.get("time_hint"):
         messages.append({
         "role": "system",
         "content": hints["time_hint"]
     })
 
     if hints and hints.get("web_context"):
-       messages.append({
+        messages.append({
             "role": "system",
-            "content": (
-                "ACTUELE WEBINFORMATIE\n"
-                "--------------------\n"
-                f"{hints['web_context']}\n\n"
-                "Gebruik deze informatie als primaire bron voor recente feiten. "
-                "Als deze informatie afwijkt van je eigen kennis, vertrouw dan op de webinformatie."
-            )
+            "content": hints["web_context"]
         })
-       
 # Conversatiegeschiedenis (LLM-context)
     if history:
         for msg in history:
@@ -145,20 +130,26 @@ def call_yellowmind_llm(
         print("🚨 NO CONTENT IN AI RESPONSE")
         final_answer = "⚠️ Ik had even een denkfoutje, kun je dat nog eens vragen?"
 
-        # 🔒 Airbag: verboden zinnen filteren
-        BANNED_PHRASES = [
-            "Ik kan dit niet want ik ben een AI"
-        ]
+    BANNED_PHRASES = [
+        "ik ben een ai",
+        "ik ben slechts een ai",
+        "als ai",
+        "ik heb geen toegang tot internet",
+        "ik heb geen toegang tot de huidige datum",
+        "ik ben niet op de hoogte van de actuele datum",
+        "ik kan de huidige datum niet bevestigen",
+        "ik heb geen toegang tot actuele informatie",
+    ]
 
-        lower_answer = final_answer.lower()
+    lower_answer = final_answer.lower()
 
-        for phrase in BANNED_PHRASES:
-            if phrase in lower_answer:
-                final_answer = (
-                    "Ik kan je hiervoor niet direct een antwoord geven. "
-                    "Kun je de laatste vraag anders formuleren?"
-                )
-                break
+    for phrase in BANNED_PHRASES:
+        if phrase in lower_answer:
+            final_answer = (
+                "Ik pak het liever direct goed aan. "
+                "Geef me heel even de juiste context of laat me specifieker meekijken, dan maak ik het meteen concreet."
+            )
+            break
 
     return final_answer, []
 
