@@ -93,40 +93,6 @@ def chat_history(session_id: str, day: str | None = Query(default=None)):
     finally:
         conn.close()
 
-# @router.get("/chat/history")
-# def chat_history(session_id: str):
-#     conn = get_conn()
-#     welcome_message = None
-
-#     user = get_auth_user_from_session(conn, session_id)
-
-#     if user:
-#         user_id = user["id"]
-
-#         active_conversation_id = get_or_create_daily_conversation(conn, user_id)
-
-#         today_history = get_user_history(conn, user_id, day="today")
-#         yesterday_history = get_user_history(conn, user_id, day="yesterday")
-
-#         if not today_history:
-#             welcome_message = build_welcome_message(user.get("first_name"))
-
-#     else:
-#         active_conversation_id = get_active_conversation(conn, session_id)
-#         _, today_history = get_history_for_model(conn, session_id, day="today")
-#         _, yesterday_history = get_history_for_model(conn, session_id, day="yesterday")
-#         welcome_message = build_welcome_message(None)
-
-#     conn.close()
-
-#     return {
-#         "active_conversation_id": active_conversation_id,
-#         "today": today_history,
-#         "yesterday": yesterday_history,
-#         "welcome": welcome_message,
-#     }
-
-
 @router.post("/chat")
 def chat(payload: dict):
     session_id = payload.get("session_id")
