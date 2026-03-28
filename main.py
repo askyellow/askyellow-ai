@@ -67,7 +67,7 @@ resend.api_key = os.getenv("RESEND_API_KEY")
 
 # begin account met verrificatie + wachtwoord reset
 
-FRONTEND_BASE_URL = os.getenv("FRONTEND_BASE_URL", "https://askyellow.nl").rstrip("/")
+FRONTEND_BASE_URL = os.getenv("FRONTEND_BASE_URL", "https://www.askyellow.nl").rstrip("/")
 MAIL_FROM = os.getenv("MAIL_FROM", "AskYellow <no-reply@askyellow.nl>")
 SESSION_TTL_DAYS = int(os.getenv("SESSION_TTL_DAYS", "30"))
 VERIFY_TOKEN_TTL_HOURS = int(os.getenv("VERIFY_TOKEN_TTL_HOURS", "24"))
